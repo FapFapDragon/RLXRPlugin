@@ -22,7 +22,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.fapfapdragon;
+package rlxr;
 
 import com.google.common.base.Charsets;
 import java.nio.ByteBuffer;
@@ -31,7 +31,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
-import com.fapfapdragon.template.Template;
+import rlxr.template.Template;
 import net.runelite.client.util.OSType;
 import net.runelite.rlawt.AWTContext;
 import static org.jocl.CL.*;

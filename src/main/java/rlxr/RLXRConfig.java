@@ -22,17 +22,17 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.fapfapdragon;
+package rlxr;
 
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.Range;
-import static com.fapfapdragon.RLXRPlugin.MAX_DISTANCE;
-import static com.fapfapdragon.RLXRPlugin.MAX_FOG_DEPTH;
-import com.fapfapdragon.config.AntiAliasingMode;
-import com.fapfapdragon.config.ColorBlindMode;
-import com.fapfapdragon.config.UIScalingMode;
+import static rlxr.RLXRPlugin.MAX_DISTANCE;
+import static rlxr.RLXRPlugin.MAX_FOG_DEPTH;
+import rlxr.config.AntiAliasingMode;
+import rlxr.config.ColorBlindMode;
+import rlxr.config.UIScalingMode;
 
 @ConfigGroup(RLXRConfig.GROUP)
 public interface RLXRConfig extends Config

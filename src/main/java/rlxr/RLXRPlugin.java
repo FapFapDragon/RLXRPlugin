@@ -22,7 +22,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.fapfapdragon;
+package rlxr;
 
 import com.google.common.primitives.Ints;
 import com.google.inject.Provides;
@@ -62,9 +62,9 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginInstantiationException;
 import net.runelite.client.plugins.PluginManager;
-import com.fapfapdragon.config.AntiAliasingMode;
-import com.fapfapdragon.config.UIScalingMode;
-import com.fapfapdragon.template.Template;
+import rlxr.config.AntiAliasingMode;
+import rlxr.config.UIScalingMode;
+import rlxr.template.Template;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.OSType;
 import net.runelite.rlawt.AWTContext;
@@ -96,6 +96,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	private static final int DEFAULT_DISTANCE = 25;
 	static final int MAX_DISTANCE = 90;
 	static final int MAX_FOG_DEPTH = 100;
+
 
 	@Inject
 	private Client client;

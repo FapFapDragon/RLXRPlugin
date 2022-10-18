@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 logarrhytmic <https://github.com/logarrhythmic>
+ * Copyright (c) 2021, Adam <Adam@sigterm.info>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -22,27 +22,19 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.fapfapdragon.config;
+package rlxr;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import org.jocl.Pointer;
+import org.jocl.cl_mem;
 
-@Getter
-@RequiredArgsConstructor
-public enum UIScalingMode
+class GLBuffer
 {
-	NEAREST("Nearest Neighbor", 0),
-	LINEAR("Bilinear", 0),
-	MITCHELL("Bicubic (Mitchell)", 1),
-	CATMULL_ROM("Bicubic (Catmull-Rom)", 2),
-	XBR("xBR", 3);
+	int glBufferId = -1;
+	int size = -1;
+	cl_mem cl_mem;
 
-	private final String name;
-	private final int mode;
-
-	@Override
-	public String toString()
+	Pointer ptr()
 	{
-		return name;
+		return cl_mem != null ? Pointer.to(cl_mem) : null;
 	}
 }

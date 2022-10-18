@@ -1,4 +1,4 @@
-package com.fapfapdragon;
+package rlxr;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
