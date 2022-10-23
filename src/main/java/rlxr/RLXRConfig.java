@@ -53,6 +53,20 @@ public interface RLXRConfig extends Config
 		return 25;
 	}
 
+	enum cameraMode
+	{
+		normal,
+		free,
+		first_person
+	}
+	@ConfigItem(
+			keyName = "cameraMode",
+			name = "Camera mode",
+			description = "Changes various Camera Modes",
+			position = 12
+	)
+	default cameraMode cameraMode() {return cameraMode.normal;}
+
 	@ConfigItem(
 			keyName = "smoothBanding",
 			name = "Remove Color Banding",
@@ -111,6 +125,7 @@ public interface RLXRConfig extends Config
 	{
 		return true;
 	}
+
 
 	@Range(
 			min = 0,

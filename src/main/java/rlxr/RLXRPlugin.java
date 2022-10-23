@@ -41,6 +41,7 @@ import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
+import lombok.val;
 import net.runelite.api.BufferProvider;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -78,6 +79,9 @@ import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.GLUtil;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.Configuration;
+import net.runelite.client.ui.overlay.OverlayManager;
+import rlxr.util.CameraControl;
+
 
 @PluginDescriptor(
 		name = "RLXR",
@@ -122,6 +126,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	@Inject
 	private PluginManager pluginManager;
 
+
 	enum ComputeMode
 	{
 		NONE,
@@ -158,6 +163,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	static final Shader UI_PROGRAM = new Shader()
 			.add(GL43C.GL_VERTEX_SHADER, "vertui.glsl")
 			.add(GL43C.GL_FRAGMENT_SHADER, "fragui.glsl");
+
+	private CameraControl camera_info;
 
 	private int glProgram;
 	private int glComputeProgram;
@@ -391,6 +398,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				}
 
 				checkGLErrors();
+
+				//INIT CAMERA CONTROL
+				camera_info = new CameraControl(client, config);
 			}
 			catch (Throwable e)
 			{
@@ -784,8 +794,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	@Override
 	public void drawScene(int cameraX, int cameraY, int cameraZ, int cameraPitch, int cameraYaw, int plane)
 	{
-		yaw = client.getCameraYaw();
-		pitch = client.getCameraPitch();
+
+		yaw = camera_info.getCameraYaw();
+		pitch = camera_info.getCameraPitch();
 		viewportOffsetX = client.getViewportXOffset();
 		viewportOffsetY = client.getViewportYOffset();
 
@@ -809,9 +820,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				.put(client.getCenterX())
 				.put(client.getCenterY())
 				.put(client.getScale())
-				.put(cameraX)
-				.put(cameraY)
-				.put(cameraZ);
+				.put(camera_info.getCameraX2())
+				.put(camera_info.getCameraY2())
+				.put(camera_info.getCameraZ2());
 		uniformBuf.flip();
 
 		GL43C.glBindBuffer(GL43C.GL_UNIFORM_BUFFER, uniformBuffer.glBufferId);
@@ -1193,7 +1204,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			Mat4.mul(projectionMatrix, Mat4.projection(viewportWidth, viewportHeight, 50));
 			Mat4.mul(projectionMatrix, Mat4.rotateX((float) -(Math.PI - pitch * Perspective.UNIT)));
 			Mat4.mul(projectionMatrix, Mat4.rotateY((float) (yaw * Perspective.UNIT)));
-			Mat4.mul(projectionMatrix, Mat4.translate(-client.getCameraX2(), -client.getCameraY2(), -client.getCameraZ2()));
+			Mat4.mul(projectionMatrix, Mat4.translate(-camera_info.getCameraX2(), -camera_info.getCameraY2(), -camera_info.getCameraZ2()));
 			GL43C.glUniformMatrix4fv(uniProjectionMatrix, false, projectionMatrix);
 
 			// Bind uniforms
@@ -1445,8 +1456,12 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	 */
 	private boolean isVisible(Model model, int pitchSin, int pitchCos, int yawSin, int yawCos, int x, int y, int z)
 	{
-		model.calculateBoundsCylinder();
 
+		model.calculateBoundsCylinder();
+		if(true)
+		{
+			return true;
+		}
 		final int xzMag = model.getXYZMag();
 		final int bottomY = model.getBottomY();
 		final int zoom = client.get3dZoom();
@@ -1555,7 +1570,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			buffer.put(tc);
 			buffer.put(targetBufferOffset);
 			buffer.put(FLAG_SCENE_BUFFER | (model.getRadius() << 12) | orientation);
-			buffer.put(x + client.getCameraX2()).put(y + client.getCameraY2()).put(z + client.getCameraZ2());
+			buffer.put(x + camera_info.getCameraX2()).put(y + camera_info.getCameraY2()).put(z + camera_info.getCameraZ2());
 
 			targetBufferOffset += tc * 3;
 		}
@@ -1592,7 +1607,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				buffer.put(len / 3);
 				buffer.put(targetBufferOffset);
 				buffer.put((model.getRadius() << 12) | orientation);
-				buffer.put(x + client.getCameraX2()).put(y + client.getCameraY2()).put(z + client.getCameraZ2());
+				buffer.put(x + camera_info.getCameraX2()).put(y + camera_info.getCameraY2()).put(z + camera_info.getCameraZ2());
 
 				tempOffset += len;
 				if (hasUv)
@@ -1729,6 +1744,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			}
 		}
 	}
+
 
 	private void checkGLErrors()
 	{
