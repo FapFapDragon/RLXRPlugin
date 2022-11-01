@@ -35,7 +35,8 @@ import net.runelite.api.DecorativeObject;
 import net.runelite.api.GameObject;
 import net.runelite.api.GroundObject;
 import net.runelite.api.Model;
-import net.runelite.api.Perspective;
+//import net.runelite.api.Perspective;
+import rlxr.util.LocalPerspective;
 import net.runelite.api.Point;
 import net.runelite.api.Renderable;
 import net.runelite.api.Scene;
@@ -43,6 +44,7 @@ import net.runelite.api.SceneTileModel;
 import net.runelite.api.SceneTilePaint;
 import net.runelite.api.Tile;
 import net.runelite.api.WallObject;
+import rlxr.util.CameraControl;
 
 @Singleton
 @Slf4j
@@ -50,6 +52,11 @@ class SceneUploader
 {
 	@Inject
 	private Client client;
+
+	@Inject
+	private RLXRConfig config;
+
+	private CameraControl camera_control = new CameraControl(client, config);
 
 	int sceneId = (int) System.nanoTime();
 	private int offset;
@@ -233,20 +240,20 @@ class SceneUploader
 		final int c1 = swColor;
 
 		// 1,0
-		int vertexCx = localX + Perspective.LOCAL_TILE_SIZE;
+		int vertexCx = localX + LocalPerspective.LOCAL_TILE_SIZE;
 		int vertexCy = localY;
 		int vertexCz = seHeight;
 		final int c2 = seColor;
 
 		// 1,1
-		int vertexAx = localX + Perspective.LOCAL_TILE_SIZE;
-		int vertexAy = localY + Perspective.LOCAL_TILE_SIZE;
+		int vertexAx = localX + LocalPerspective.LOCAL_TILE_SIZE;
+		int vertexAy = localY + LocalPerspective.LOCAL_TILE_SIZE;
 		int vertexAz = neHeight;
 		final int c3 = neColor;
 
 		// 0,1
 		int vertexBx = localX;
-		int vertexBy = localY + Perspective.LOCAL_TILE_SIZE;
+		int vertexBy = localY + LocalPerspective.LOCAL_TILE_SIZE;
 		int vertexBz = nwHeight;
 		final int c4 = nwColor;
 
@@ -295,8 +302,8 @@ class SceneUploader
 		vertexBuffer.ensureCapacity(faceCount * 12);
 		uvBuffer.ensureCapacity(faceCount * 12);
 
-		int baseX = Perspective.LOCAL_TILE_SIZE * tileX;
-		int baseY = Perspective.LOCAL_TILE_SIZE * tileY;
+		int baseX = LocalPerspective.LOCAL_TILE_SIZE * tileX;
+		int baseY = LocalPerspective.LOCAL_TILE_SIZE * tileY;
 
 		int cnt = 0;
 		for (int i = 0; i < faceCount; ++i)
@@ -547,9 +554,11 @@ class SceneUploader
 		final int centerY = client.getCenterY();
 		final int zoom = client.get3dZoom();
 
-		final int cameraX = client.getCameraX2();
-		final int cameraY = client.getCameraY2();
-		final int cameraZ = client.getCameraZ2();
+
+
+		final int cameraX = camera_control.getCameraX2();
+		final int cameraY = camera_control.getCameraY2();
+		final int cameraZ = camera_control.getCameraZ2();
 
 		// remove camera offset from model
 		x += cameraX;
@@ -560,8 +569,8 @@ class SceneUploader
 		int orientCosine = 0;
 		if (orientation != 0)
 		{
-			orientSine = Perspective.SINE[orientation];
-			orientCosine = Perspective.COSINE[orientation];
+			orientSine = LocalPerspective.SINE[orientation];
+			orientCosine = LocalPerspective.COSINE[orientation];
 		}
 
 		for (int v = 0; v < vertexCount; ++v)

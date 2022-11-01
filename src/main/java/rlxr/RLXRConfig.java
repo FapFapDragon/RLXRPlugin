@@ -142,6 +142,42 @@ public interface RLXRConfig extends Config
 		return 0;
 	}
 
+	@Range(
+			min = Integer.MIN_VALUE,
+			max = Integer.MAX_VALUE
+	)
+	@ConfigItem(
+			keyName = "CameraXOffset",
+			name = "X Offset",
+			description = "Sets The X Offset.",
+			position = 13
+	)
+	default int CameraXOffset() {return 0;}
+
+	@Range(
+			min = Integer.MIN_VALUE,
+			max = Integer.MAX_VALUE
+	)
+	@ConfigItem(
+			keyName = "CameraYOffset",
+			name = "Y Offset",
+			description = "Sets The Y Offset.",
+			position = 14
+	)
+	default int CameraYOffset() {return 0;}
+
+	@Range(
+			min = Integer.MIN_VALUE,
+			max = Integer.MAX_VALUE
+	)
+	@ConfigItem(
+			keyName = "CameraZOffset",
+			name = "Z Offset",
+			description = "Sets The Z Offset.",
+			position = 15
+	)
+	default int CameraZOffset() {return 0;}
+
 	@ConfigItem(
 			keyName = "colorBlindMode",
 			name = "Colorblindness Correction",

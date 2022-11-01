@@ -46,7 +46,10 @@ import net.runelite.api.BufferProvider;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Model;
-import net.runelite.api.Perspective;
+//Swap perspective for LocalPerspective
+//import net.runelite.api.Perspective;
+import rlxr.util.LocalPerspective;
+
 import net.runelite.api.Renderable;
 import net.runelite.api.Scene;
 import net.runelite.api.SceneTileModel;
@@ -401,6 +404,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 				//INIT CAMERA CONTROL
 				camera_info = new CameraControl(client, config);
+
+				LocalPerspective.camera_control = camera_info;
 			}
 			catch (Throwable e)
 			{
@@ -749,8 +754,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		final int[] pad = new int[2];
 		for (int i = 0; i < 2048; i++)
 		{
-			uniformBuf.put(Perspective.SINE[i]);
-			uniformBuf.put(Perspective.COSINE[i]);
+			uniformBuf.put(LocalPerspective.SINE[i]);
+			uniformBuf.put(LocalPerspective.COSINE[i]);
 			uniformBuf.put(pad); // ivec2 alignment in std140 is 16 bytes
 		}
 		uniformBuf.flip();
@@ -820,9 +825,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				.put(client.getCenterX())
 				.put(client.getCenterY())
 				.put(client.getScale())
-				.put(camera_info.getCameraX2())
-				.put(camera_info.getCameraY2())
-				.put(camera_info.getCameraZ2());
+				.put(client.getCameraX2())
+				.put(client.getCameraY2())
+				.put(client.getCameraZ2());
 		uniformBuf.flip();
 
 		GL43C.glBindBuffer(GL43C.GL_UNIFORM_BUFFER, uniformBuffer.glBufferId);
@@ -968,16 +973,16 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			targetBufferOffset += sceneUploader.upload(paint,
 					tileZ, tileX, tileY,
 					vertexBuffer, uvBuffer,
-					Perspective.LOCAL_TILE_SIZE * tileX,
-					Perspective.LOCAL_TILE_SIZE * tileY,
+					LocalPerspective.LOCAL_TILE_SIZE * tileX,
+					LocalPerspective.LOCAL_TILE_SIZE * tileY,
 					true
 			);
 		}
 		else if (paint.getBufferLen() > 0)
 		{
-			final int localX = tileX * Perspective.LOCAL_TILE_SIZE;
+			final int localX = tileX * LocalPerspective.LOCAL_TILE_SIZE;
 			final int localY = 0;
-			final int localZ = tileY * Perspective.LOCAL_TILE_SIZE;
+			final int localZ = tileY * LocalPerspective.LOCAL_TILE_SIZE;
 
 			GpuIntBuffer b = modelBufferUnordered;
 			++unorderedModels;
@@ -1005,13 +1010,13 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			targetBufferOffset += sceneUploader.upload(model,
 					tileX, tileY,
 					vertexBuffer, uvBuffer,
-					tileX << Perspective.LOCAL_COORD_BITS, tileY << Perspective.LOCAL_COORD_BITS, true);
+					tileX << LocalPerspective.LOCAL_COORD_BITS, tileY << LocalPerspective.LOCAL_COORD_BITS, true);
 		}
 		else if (model.getBufferLen() > 0)
 		{
-			final int localX = tileX * Perspective.LOCAL_TILE_SIZE;
+			final int localX = tileX * LocalPerspective.LOCAL_TILE_SIZE;
 			final int localY = 0;
-			final int localZ = tileY * Perspective.LOCAL_TILE_SIZE;
+			final int localZ = tileY * LocalPerspective.LOCAL_TILE_SIZE;
 
 			GpuIntBuffer b = modelBufferUnordered;
 			++unorderedModels;
@@ -1186,7 +1191,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			GL43C.glUniform1i(uniUseFog, fogDepth > 0 ? 1 : 0);
 			GL43C.glUniform4f(uniFogColor, (sky >> 16 & 0xFF) / 255f, (sky >> 8 & 0xFF) / 255f, (sky & 0xFF) / 255f, 1f);
 			GL43C.glUniform1i(uniFogDepth, fogDepth);
-			GL43C.glUniform1i(uniDrawDistance, drawDistance * Perspective.LOCAL_TILE_SIZE);
+			GL43C.glUniform1i(uniDrawDistance, drawDistance * LocalPerspective.LOCAL_TILE_SIZE);
 
 			// Brightness happens to also be stored in the texture provider, so we use that
 			GL43C.glUniform1f(uniBrightness, (float) textureProvider.getBrightness());
@@ -1202,8 +1207,10 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			// Calculate projection matrix
 			float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
 			Mat4.mul(projectionMatrix, Mat4.projection(viewportWidth, viewportHeight, 50));
-			Mat4.mul(projectionMatrix, Mat4.rotateX((float) -(Math.PI - pitch * Perspective.UNIT)));
-			Mat4.mul(projectionMatrix, Mat4.rotateY((float) (yaw * Perspective.UNIT)));
+			Mat4.mul(projectionMatrix, Mat4.rotateX((float) -(Math.PI - camera_info.getCameraPitch() * LocalPerspective.UNIT)));
+			Mat4.mul(projectionMatrix, Mat4.rotateY((float) (camera_info.getCameraYaw() * LocalPerspective.UNIT)));
+
+			//This is the only place you need to change the Camera Values??
 			Mat4.mul(projectionMatrix, Mat4.translate(-camera_info.getCameraX2(), -camera_info.getCameraY2(), -camera_info.getCameraZ2()));
 			GL43C.glUniformMatrix4fv(uniProjectionMatrix, false, projectionMatrix);
 
@@ -1570,7 +1577,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			buffer.put(tc);
 			buffer.put(targetBufferOffset);
 			buffer.put(FLAG_SCENE_BUFFER | (model.getRadius() << 12) | orientation);
-			buffer.put(x + camera_info.getCameraX2()).put(y + camera_info.getCameraY2()).put(z + camera_info.getCameraZ2());
+			buffer.put(x + client.getCameraX2()).put(y + client.getCameraY2()).put(z + client.getCameraZ2());
 
 			targetBufferOffset += tc * 3;
 		}
@@ -1607,7 +1614,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				buffer.put(len / 3);
 				buffer.put(targetBufferOffset);
 				buffer.put((model.getRadius() << 12) | orientation);
-				buffer.put(x + camera_info.getCameraX2()).put(y + camera_info.getCameraY2()).put(z + camera_info.getCameraZ2());
+				buffer.put(x + client.getCameraX2()).put(y + client.getCameraY2() ).put(z + client.getCameraZ2());
 
 				tempOffset += len;
 				if (hasUv)
