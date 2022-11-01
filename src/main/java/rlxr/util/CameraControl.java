@@ -1,10 +1,7 @@
 package rlxr.util;
 
 import jdk.vm.ci.meta.Local;
-import net.runelite.api.Client;
-import net.runelite.api.Player;
-import net.runelite.api.Perspective;
-import net.runelite.api.Point;
+import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import rlxr.RLXRConfig;
@@ -71,14 +68,10 @@ public class CameraControl {
             try
             {
                 player = client.getLocalPlayer();
-                player.getModel().getCenterX();
-                int camera_x = client.getCameraX2();
-                int camera_y = client.getCameraY2();
-                int camera_z = client.getCameraZ2();
+                int height = player.getModelHeight();
                 LocalPoint playloc = player.getLocalLocation();
-                Point canvas = Perspective.localToCanvas(client, playloc, 0);
-                //return canvas.getY();
-                return config.CameraYOffset();
+                int tile_y = Perspective.getTileHeight(client, playloc, client.getPlane());
+                return tile_y - height + 60;
             }
             catch (NullPointerException e)
             {
@@ -145,10 +138,10 @@ public class CameraControl {
             try
             {
                 player = client.getLocalPlayer();
-                player.getModel().getCenterX();
+                int height = player.getModelHeight();
                 LocalPoint playloc = player.getLocalLocation();
-                Point canvas = LocalPerspective.localToCanvas(client, playloc, 0);
-                return -canvas.getY();
+                int tile_y = Perspective.getTileHeight(client, playloc, client.getPlane());
+                return tile_y - height + 60;
             }
             catch (NullPointerException e)
             {
