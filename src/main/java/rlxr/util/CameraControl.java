@@ -3,18 +3,20 @@ package rlxr.util;
 import jdk.vm.ci.meta.Local;
 import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.callback.Hooks;
+import net.runelite.client.ui.overlay.Overlay;
 import rlxr.RLXRConfig;
 
+import net.runelite.client.input.MouseListener;
+import java.awt.*;
 import java.awt.event.*;
 import java.io.Console;
+import java.util.ArrayList;
 
-import net.runelite.client.input.KeyManager;
+import net.runelite.client.ui.overlay.OverlayUtil;
 
+public class CameraControl extends Overlay implements MouseListener {
 
-public class CameraControl {
-
-    private  KeyManager key_manager;
 
     KeyListener key_listener;
     private Client client;
@@ -25,7 +27,7 @@ public class CameraControl {
 
     private int last_yaw = 0;
 
-    private float free_x,free_y,free_z;
+    private int free_x,free_y,free_z;
 
     private float pitch_modified, yaw_modified;
 
@@ -35,11 +37,25 @@ public class CameraControl {
     {
         this.client = _client;
         this.config = _config;
+        free_z = Integer.MIN_VALUE;
+        free_x = Integer.MIN_VALUE;
+        free_y = Integer.MIN_VALUE;
     }
 
     public int getCameraX2()
     {
-
+        if (config.cameraMode() == RLXRConfig.cameraMode.free)
+        {
+            if (free_x == Integer.MIN_VALUE)
+            {
+                free_x = client.getCameraX2();
+            }
+            return  free_x + config.CameraXOffset();
+        }
+        if (free_x != Integer.MIN_VALUE)
+        {
+            free_x = Integer.MIN_VALUE;
+        }
         if (config.cameraMode() == RLXRConfig.cameraMode.first_person)
         {
 
@@ -63,6 +79,18 @@ public class CameraControl {
 
     public int getCameraY2()
     {
+        if (config.cameraMode() == RLXRConfig.cameraMode.free)
+        {
+            if (free_y == Integer.MIN_VALUE)
+            {
+                free_y = client.getCameraY2();
+            }
+            return  free_y + config.CameraYOffset();
+        }
+        if (free_y != Integer.MIN_VALUE)
+        {
+            free_y = Integer.MIN_VALUE;
+        }
         if (config.cameraMode() == RLXRConfig.cameraMode.first_person)
         {
             try
@@ -71,7 +99,7 @@ public class CameraControl {
                 int height = player.getModelHeight();
                 LocalPoint playloc = player.getLocalLocation();
                 int tile_y = Perspective.getTileHeight(client, playloc, client.getPlane());
-                return tile_y - height + 60;
+                return tile_y - height + 60 + config.CameraYOffset();
             }
             catch (NullPointerException e)
             {
@@ -84,14 +112,30 @@ public class CameraControl {
         }
     }
 
+    private Shape drop = null;
     public int getCameraZ2()
     {
+
+
+        if (config.cameraMode() == RLXRConfig.cameraMode.free)
+        {
+            if (free_z == Integer.MIN_VALUE)
+            {
+                free_z = client.getCameraZ2();
+            }
+            return  free_z + config.CameraZOffset();
+        }
+        if (free_z != Integer.MIN_VALUE)
+        {
+            free_z = Integer.MIN_VALUE;
+        }
         if (config.cameraMode() == RLXRConfig.cameraMode.first_person)
         {
             try
             {
                 player = client.getLocalPlayer();
                 LocalPoint playloc = player.getLocalLocation();
+                int tile_y = Perspective.getTileHeight(client, playloc, client.getPlane());
                 return playloc.getY();
                 //return client.getCameraZ2() + config.CameraZOffset();
                 //return player.getLogicalHeight() ;
@@ -107,9 +151,17 @@ public class CameraControl {
         }
     }
 
+
     public int getCameraX()
     {
-
+        /*if (config.cameraMode() == RLXRConfig.cameraMode.free && free_x != Integer.MIN_VALUE)
+        {
+            return  free_x + config.CameraXOffset();
+        }*/
+        if (config.cameraMode() == RLXRConfig.cameraMode.free)
+        {
+            return client.getCameraX() + config.CameraXOffset();
+        }
         if (config.cameraMode() == RLXRConfig.cameraMode.first_person)
         {
 
@@ -118,6 +170,7 @@ public class CameraControl {
                 player = client.getLocalPlayer();
                 LocalPoint playloc = player.getLocalLocation();
                 return playloc.getX();
+                //return client.getCameraX2() + config.CameraXOffset();
             }
             catch (NullPointerException e)
             {
@@ -132,16 +185,23 @@ public class CameraControl {
 
     public int getCameraY()
     {
+        /*if (config.cameraMode() == RLXRConfig.cameraMode.free && free_y != Integer.MIN_VALUE)
+        {
+            return  free_y + config.CameraYOffset();
+        }*/
+        if (config.cameraMode() == RLXRConfig.cameraMode.free)
+        {
+            return client.getCameraY() + config.CameraYOffset();
+        }
         if (config.cameraMode() == RLXRConfig.cameraMode.first_person)
         {
-
             try
             {
                 player = client.getLocalPlayer();
                 int height = player.getModelHeight();
                 LocalPoint playloc = player.getLocalLocation();
                 int tile_y = Perspective.getTileHeight(client, playloc, client.getPlane());
-                return tile_y - height + 60;
+                return tile_y - height + 60 + config.CameraYOffset();
             }
             catch (NullPointerException e)
             {
@@ -154,17 +214,27 @@ public class CameraControl {
         }
     }
 
+
     public int getCameraZ()
     {
+        /*if (config.cameraMode() == RLXRConfig.cameraMode.free && free_z != Integer.MIN_VALUE)
+        {
+            return  free_z + config.CameraZOffset();
+        }*/
+        if (config.cameraMode() == RLXRConfig.cameraMode.free)
+        {
+            return client.getCameraZ() + config.CameraZOffset();
+        }
         if (config.cameraMode() == RLXRConfig.cameraMode.first_person)
         {
-
             try
             {
                 player = client.getLocalPlayer();
                 LocalPoint playloc = player.getLocalLocation();
+
                 return playloc.getY();
-               // return player.getLogicalHeight() + config.CameraZOffset();
+                //return client.getCameraZ2() + config.CameraZOffset();
+                //return player.getLogicalHeight() ;
             }
             catch (NullPointerException e)
             {
@@ -203,6 +273,7 @@ public class CameraControl {
         }
     }
 
+
     public int getCameraPitch()
     {
         if (config.cameraMode() == RLXRConfig.cameraMode.first_person)
@@ -219,6 +290,203 @@ public class CameraControl {
             return direction_mod[localOrientation];
         }
         return 0;
+    }
+
+
+    java.util.List<Shape> outline_objs = new ArrayList<Shape>();
+    java.util.List<Shape> outline_npc  = new ArrayList<Shape>();
+    java.util.List<Shape> outline_tile  = new ArrayList<Shape>();
+    public void convertClick(MouseEvent e)
+    {
+        Scene scene = client.getScene();
+        Tile[][][] tiles = scene.getTiles();
+        outline_objs.clear();
+        //outline_npc.clear();
+        outline_tile.clear();
+        if (outline_npc.size() > 0)
+        {
+            for (int i = 0; i < outline_npc.size(); i++)
+            {
+                if (outline_npc.get(i) == null)
+                {
+                    continue;
+                }
+                if (outline_npc.get(i).contains(e.getPoint()))
+                {
+                    int stop = 1;
+                }
+            }
+        }
+        /*for (int z = 0; z < Constants.MAX_Z; z++)
+        {
+            for (int x = 0; x < Constants.SCENE_SIZE; x++)
+            {
+                for (int y = 0; y < Constants.SCENE_SIZE; y++)
+                {
+                    Tile tile = tiles[z][x][y];
+                    if (tile == null)
+                    {
+                        continue;
+                    }
+                    GameObject[] gameobjs = tile.getGameObjects();
+                    if (gameobjs != null)
+                    {
+                        for (GameObject item : gameobjs)
+                        {
+                            if (item == null)
+                            {
+                                continue;
+                            }
+                            Model m = item.getRenderable().getModel();
+
+                            if (m == null)
+                            {
+                                continue;
+                            }
+                            LocalPoint p = item.getLocalLocation();
+                            //int y_val = LocalPerspective.getTileHeight(client, p, client.getPlane());
+                            //Shape s = LocalPerspective.getClickbox(client, m, 0, p.getX(), y_val, p.getY());
+                            int y_val = Perspective.getTileHeight(client, p, client.getPlane());
+                            Shape s = Perspective.getClickbox(client, m, 0, p.getX(), p.getY(), y_val);
+                            outline_objs.add(s);
+                        }
+                    }
+                    java.util.List<TileItem> items = tile.getGroundItems();
+                    if (items != null)
+                    {
+                        for (TileItem item : items)
+                        {
+                            if (item.getId() != 1203)
+                            {
+                                continue;
+                            }
+                            Model m = item.getModel();
+                            LocalPoint p = tile.getLocalLocation();
+                            //int y_val = LocalPerspective.getTileHeight(client, p, client.getPlane());
+                            //Shape s = LocalPerspective.getClickbox(client, m, 0, p.getX(), y_val, p.getY());
+                            int y_val = Perspective.getTileHeight(client, p, client.getPlane());
+                            Shape s = Perspective.getClickbox(client, m, 0, p.getX(), p.getY(),y_val);
+                            outline_objs.add(s);
+                        }
+                    }
+                }
+            }
+        }*/
+
+        return;
+    }
+
+
+    @Override
+    public MouseEvent mousePressed(MouseEvent mouseEvent)
+    {
+        return mouseEvent;
+    }
+
+    @Override
+    public MouseEvent mouseReleased(MouseEvent mouseEvent)
+    {
+        return mouseEvent;
+    }
+
+    @Override
+    public MouseEvent mouseDragged(MouseEvent mouseEvent)
+    {
+        return mouseEvent;
+    }
+
+    @Override
+    public MouseEvent mouseMoved(MouseEvent mouseEvent)
+    {
+        return mouseEvent;
+    }
+
+    @Override
+    public MouseEvent mouseClicked(MouseEvent mouseEvent)
+    {
+        convertClick(mouseEvent);
+        return mouseEvent;
+    }
+
+    @Override
+    public MouseEvent mouseEntered(MouseEvent mouseEvent)
+    {
+        return mouseEvent;
+    }
+
+    @Override
+    public MouseEvent mouseExited(MouseEvent mouseEvent)
+    {
+        return mouseEvent;
+    }
+
+    @Override
+    public  Dimension render(Graphics2D graphics)
+    {
+        // x coordinates of vertices
+        int x[] = { 10, 30, 40, 50, 110, 140 };
+
+        // y coordinates of vertices
+        int y[] = { 140, 110, 50, 40, 30, 10 };
+        Polygon poly = new Polygon(x, y, 0);
+        Color col = new Color(128, 0, 0);
+        Stroke str = new BasicStroke();
+
+        /*try
+        {
+            Player player1 = client.getLocalPlayer();
+            LocalPoint playloc1 = player1.getLocalLocation();
+            int tile_y = Perspective.getTileHeight(client, playloc1, client.getPlane());
+
+            Shape s = LocalPerspective.getClickbox(client, player1.getModel(), player1.getCurrentOrientation(), playloc1.getX(), playloc1.getY(), tile_y);
+            drop = s;
+        }
+        catch (Exception e)
+        {
+
+        }*/
+        if (drop != null)
+        {
+            OverlayUtil.renderPolygon(graphics, drop, col, str);
+        }
+        if (outline_objs.size() > 0)
+        {
+            for (int i = 0; i < outline_objs.size(); i++)
+            {
+                OverlayUtil.renderPolygon(graphics, outline_objs.get(i), col, str);
+            }
+        }
+
+        outline_npc.clear();
+        java.util.List<NPC> npcList = client.getNpcs();
+        if (npcList != null)
+        {
+            for (NPC npc : npcList)
+            {
+                if (npc == null)
+                {
+                    continue;
+                }
+                Model m = npc.getModel();
+                LocalPoint p = npc.getLocalLocation();
+                int y_val = Perspective.getTileHeight(client, p, client.getPlane());
+                Shape s = LocalPerspective.getClickbox(client, m, npc.getCurrentOrientation(), p.getX(), p.getY(),y_val);
+                outline_npc.add(s);
+            }
+        }
+
+        if (outline_npc.size() > 0)
+        {
+            for (int i = 0; i < outline_npc.size(); i++)
+            {
+                if (outline_npc.get(i) == null)
+                {
+                    continue;
+                }
+                OverlayUtil.renderPolygon(graphics, outline_npc.get(i), col, str);
+            }
+        }
+        return null;
     }
 // Instead of this add a KeyEvent class that will listen for keyboard inputs, add a callback from this function
 }

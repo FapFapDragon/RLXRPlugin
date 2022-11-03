@@ -556,9 +556,9 @@ class SceneUploader
 
 
 
-		final int cameraX = camera_control.getCameraX2();
-		final int cameraY = camera_control.getCameraY2();
-		final int cameraZ = camera_control.getCameraZ2();
+		final int cameraX = client.getCameraX2();
+		final int cameraY = client.getCameraY2();
+		final int cameraZ = client.getCameraZ2();
 
 		// remove camera offset from model
 		x += cameraX;

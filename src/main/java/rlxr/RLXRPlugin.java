@@ -48,6 +48,7 @@ import net.runelite.api.GameState;
 import net.runelite.api.Model;
 //Swap perspective for LocalPerspective
 //import net.runelite.api.Perspective;
+import net.runelite.client.input.MouseManager;
 import rlxr.util.LocalPerspective;
 
 import net.runelite.api.Renderable;
@@ -129,6 +130,11 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	@Inject
 	private PluginManager pluginManager;
 
+	@Inject
+	private MouseManager mouseManager;
+
+	@Inject
+	private OverlayManager overlayManager;
 
 	enum ComputeMode
 	{
@@ -404,8 +410,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 				//INIT CAMERA CONTROL
 				camera_info = new CameraControl(client, config);
-
+				mouseManager.registerMouseListener(camera_info);
 				LocalPerspective.camera_control = camera_info;
+				overlayManager.add(camera_info);
 			}
 			catch (Throwable e)
 			{

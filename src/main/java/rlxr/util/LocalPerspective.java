@@ -68,8 +68,8 @@ public class LocalPerspective
 
     public static final int SCENE_SIZE = Constants.SCENE_SIZE; // in tiles
 
-    public static final int[] SINE = new int[2048]; // sine angles for each of the 2048 units, * 65536 and stored as an int
-    public static final int[] COSINE = new int[2048]; // cosine
+    public static final int[] SINE = new int[2049]; // sine angles for each of the 2048 units, * 65536 and stored as an int
+    public static final int[] COSINE = new int[2049]; // cosine
 
     @Inject
     private static RLXRConfig config;
@@ -78,7 +78,7 @@ public class LocalPerspective
 
     static
     {
-        for (int i = 0; i < 2048; ++i)
+        for (int i = 0; i < 2049; ++i)
         {
             SINE[i] = (int) (65536.0D * Math.sin((double) i * UNIT));
             COSINE[i] = (int) (65536.0D * Math.cos((double) i * UNIT));
@@ -134,12 +134,12 @@ public class LocalPerspective
     {
         if (x >= 128 && y >= 128 && x <= 13056 && y <= 13056)
         {
-            x -= client.getCameraX();
-            y -= client.getCameraY();
-            z -= client.getCameraZ();
+            x -= camera_control.getCameraX();
+            y -= camera_control.getCameraY();
+            z -= camera_control.getCameraZ();
 
             final int cameraPitch = camera_control.getCameraPitch();
-            final int cameraYaw = client.getCameraYaw();
+            final int cameraYaw = camera_control.getCameraYaw();
 
             final int pitchSin = SINE[cameraPitch];
             final int pitchCos = COSINE[cameraPitch];
@@ -260,10 +260,15 @@ public class LocalPerspective
                 yawCos = COSINE[cameraYaw],
                 rotateSin = SINE[rotate],
                 rotateCos = COSINE[rotate],
-
-                cx = x3dCenter - camera_control.getCameraX(),
-                cy = y3dCenter - camera_control.getCameraY(),
-                cz = z3dCenter - camera_control.getCameraZ(),
+                camera_x_raw = client.getCameraX(),
+                camera_y_raw = client.getCameraY(),
+                camera_z_raw = client.getCameraZ(),
+                camera_x_adj = camera_control.getCameraX(),
+                camera_y_adj = camera_control.getCameraZ(),
+                camera_z_adj = camera_control.getCameraY(),
+                cx = x3dCenter - camera_x_adj,
+                cy = y3dCenter - camera_y_adj,
+                cz = z3dCenter - camera_z_adj,
 
                 viewportXMiddle = client.getViewportWidth() / 2,
                 viewportYMiddle = client.getViewportHeight() / 2,
@@ -725,6 +730,11 @@ public class LocalPerspective
             return bounds;
         }
 
+        if (bounds != null)
+        {
+            return bounds;
+        }
+
         Shapes<SimplePolygon> bounds2d = calculate2DBounds(client, model, orientation, x, y, z);
         if (bounds2d == null)
         {
@@ -776,8 +786,8 @@ public class LocalPerspective
         int[] y2d = new int[8];
 
         modelToCanvasCpu(client, 8, x, y, z, 0, xa, ya, za, x2d, y2d);
-
-        return Jarvis.convexHull(x2d, y2d);
+        SimplePolygon poly = Jarvis.convexHull(x2d, y2d);
+        return poly;
     }
 
     private static Shapes<SimplePolygon> calculate2DBounds(Client client, Model m, int jauOrient, int x, int y, int z)
