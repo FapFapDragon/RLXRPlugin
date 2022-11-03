@@ -112,7 +112,6 @@ public class CameraControl extends Overlay implements MouseListener {
         }
     }
 
-    private Shape drop = null;
     public int getCameraZ2()
     {
 
@@ -317,7 +316,7 @@ public class CameraControl extends Overlay implements MouseListener {
                 }
             }
         }
-        /*for (int z = 0; z < Constants.MAX_Z; z++)
+        for (int z = 0; z < Constants.MAX_Z; z++)
         {
             for (int x = 0; x < Constants.SCENE_SIZE; x++)
             {
@@ -328,29 +327,10 @@ public class CameraControl extends Overlay implements MouseListener {
                     {
                         continue;
                     }
-                    GameObject[] gameobjs = tile.getGameObjects();
-                    if (gameobjs != null)
-                    {
-                        for (GameObject item : gameobjs)
-                        {
-                            if (item == null)
-                            {
-                                continue;
-                            }
-                            Model m = item.getRenderable().getModel();
+                    LocalPoint tile_point = tile.getLocalLocation();
+                    Polygon poly = LocalPerspective.getCanvasTilePoly(client, tile_point);
+                    outline_tile.add(poly);
 
-                            if (m == null)
-                            {
-                                continue;
-                            }
-                            LocalPoint p = item.getLocalLocation();
-                            //int y_val = LocalPerspective.getTileHeight(client, p, client.getPlane());
-                            //Shape s = LocalPerspective.getClickbox(client, m, 0, p.getX(), y_val, p.getY());
-                            int y_val = Perspective.getTileHeight(client, p, client.getPlane());
-                            Shape s = Perspective.getClickbox(client, m, 0, p.getX(), p.getY(), y_val);
-                            outline_objs.add(s);
-                        }
-                    }
                     java.util.List<TileItem> items = tile.getGroundItems();
                     if (items != null)
                     {
@@ -364,14 +344,14 @@ public class CameraControl extends Overlay implements MouseListener {
                             LocalPoint p = tile.getLocalLocation();
                             //int y_val = LocalPerspective.getTileHeight(client, p, client.getPlane());
                             //Shape s = LocalPerspective.getClickbox(client, m, 0, p.getX(), y_val, p.getY());
-                            int y_val = Perspective.getTileHeight(client, p, client.getPlane());
-                            Shape s = Perspective.getClickbox(client, m, 0, p.getX(), p.getY(),y_val);
+                            int y_val = LocalPerspective.getTileHeight(client, p, client.getPlane());
+                            Shape s = LocalPerspective.getClickbox(client, m, 0, p.getX(),y_val, p.getY());
                             outline_objs.add(s);
                         }
                     }
                 }
             }
-        }*/
+        }
 
         return;
     }
@@ -430,32 +410,8 @@ public class CameraControl extends Overlay implements MouseListener {
         int y[] = { 140, 110, 50, 40, 30, 10 };
         Polygon poly = new Polygon(x, y, 0);
         Color col = new Color(128, 0, 0);
+        Color othCol = new Color(128, 128, 0);
         Stroke str = new BasicStroke();
-
-        /*try
-        {
-            Player player1 = client.getLocalPlayer();
-            LocalPoint playloc1 = player1.getLocalLocation();
-            int tile_y = Perspective.getTileHeight(client, playloc1, client.getPlane());
-
-            Shape s = LocalPerspective.getClickbox(client, player1.getModel(), player1.getCurrentOrientation(), playloc1.getX(), playloc1.getY(), tile_y);
-            drop = s;
-        }
-        catch (Exception e)
-        {
-
-        }*/
-        if (drop != null)
-        {
-            OverlayUtil.renderPolygon(graphics, drop, col, str);
-        }
-        if (outline_objs.size() > 0)
-        {
-            for (int i = 0; i < outline_objs.size(); i++)
-            {
-                OverlayUtil.renderPolygon(graphics, outline_objs.get(i), col, str);
-            }
-        }
 
         outline_npc.clear();
         java.util.List<NPC> npcList = client.getNpcs();
@@ -469,12 +425,13 @@ public class CameraControl extends Overlay implements MouseListener {
                 }
                 Model m = npc.getModel();
                 LocalPoint p = npc.getLocalLocation();
-                int y_val = Perspective.getTileHeight(client, p, client.getPlane());
+                int y_val = LocalPerspective.getTileHeight(client, p, client.getPlane());
                 Shape s = LocalPerspective.getClickbox(client, m, npc.getCurrentOrientation(), p.getX(), p.getY(),y_val);
                 outline_npc.add(s);
             }
         }
 
+        /*
         if (outline_npc.size() > 0)
         {
             for (int i = 0; i < outline_npc.size(); i++)
@@ -484,6 +441,18 @@ public class CameraControl extends Overlay implements MouseListener {
                     continue;
                 }
                 OverlayUtil.renderPolygon(graphics, outline_npc.get(i), col, str);
+            }
+        }*/
+
+        if (outline_tile.size() > 0)
+        {
+            for (int i = 0; i < outline_tile.size(); i++)
+            {
+                if (outline_tile.get(i) == null)
+                {
+                    continue;
+                }
+                OverlayUtil.renderPolygon(graphics, outline_tile.get(i), othCol, str);
             }
         }
         return null;

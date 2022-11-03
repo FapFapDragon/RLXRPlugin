@@ -135,8 +135,8 @@ public class LocalPerspective
         if (x >= 128 && y >= 128 && x <= 13056 && y <= 13056)
         {
             x -= camera_control.getCameraX();
-            y -= camera_control.getCameraY();
-            z -= camera_control.getCameraZ();
+            y -= camera_control.getCameraZ();
+            z -= camera_control.getCameraY();
 
             final int cameraPitch = camera_control.getCameraPitch();
             final int cameraYaw = camera_control.getCameraYaw();
