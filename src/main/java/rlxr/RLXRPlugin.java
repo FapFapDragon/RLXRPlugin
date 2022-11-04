@@ -136,7 +136,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	@Inject
 	private OverlayManager overlayManager;
 
-	enum ComputeMode
+	public enum ComputeMode
 	{
 		NONE,
 		OPENGL,
@@ -410,6 +410,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 				//INIT CAMERA CONTROL
 				camera_info = new CameraControl(client, config);
+				camera_info.computeMode = computeMode;
 				mouseManager.registerMouseListener(camera_info);
 				LocalPerspective.camera_control = camera_info;
 				overlayManager.add(camera_info);
