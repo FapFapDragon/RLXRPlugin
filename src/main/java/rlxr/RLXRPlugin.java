@@ -42,21 +42,14 @@ import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
-import net.runelite.api.BufferProvider;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
-import net.runelite.api.Model;
+import net.runelite.api.*;
 //Swap perspective for LocalPerspective
 //import net.runelite.api.Perspective;
+import net.runelite.api.events.NpcDespawned;
+import net.runelite.api.events.NpcSpawned;
 import net.runelite.client.input.MouseManager;
 import rlxr.util.LocalPerspective;
 
-import net.runelite.api.Renderable;
-import net.runelite.api.Scene;
-import net.runelite.api.SceneTileModel;
-import net.runelite.api.SceneTilePaint;
-import net.runelite.api.Texture;
-import net.runelite.api.TextureProvider;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.hooks.DrawCallbacks;
 import net.runelite.client.callback.ClientThread;
@@ -410,10 +403,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 				//INIT CAMERA CONTROL
 				camera_info = new CameraControl(client, config);
-				camera_info.computeMode = computeMode;
-				mouseManager.registerMouseListener(camera_info);
 				LocalPerspective.camera_control = camera_info;
-				overlayManager.add(camera_info);
+
 			}
 			catch (Throwable e)
 			{
@@ -488,6 +479,10 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			modelBufferUnordered = null;
 
 			lastAnisotropicFilteringLevel = -1;
+
+			//INIT CAMERA CONTROL
+			//camera_info = new CameraControl(client, config);
+			//camera_info.computeMode = computeMode;
 
 			// force main buffer provider rebuild to turn off alpha channel
 			client.resizeCanvas();
@@ -1533,6 +1528,14 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	@Override
 	public void draw(Renderable renderable, int orientation, int pitchSin, int pitchCos, int yawSin, int yawCos, int x, int y, int z, long hash)
 	{
+		int mod_x = (x + client.getCameraX2() - camera_info.getCameraX2());
+		int mod_y = (y + client.getCameraY2() - camera_info.getCameraY2());
+		int mod_z = (z + client.getCameraZ2() - camera_info.getCameraZ2());
+		final int
+				mod_pitchSin =  LocalPerspective.SINE[camera_info.getCameraPitch()] ,
+				mod_pitchCos = LocalPerspective.COSINE[camera_info.getCameraPitch()],
+				mod_yawSin = LocalPerspective.SINE[camera_info.getCameraYaw()] ,
+				mod_yawCos = LocalPerspective.COSINE[camera_info.getCameraYaw()] ;
 		if (computeMode == ComputeMode.NONE)
 		{
 			Model model = renderable instanceof Model ? (Model) renderable : renderable.getModel();
@@ -1544,18 +1547,20 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 					renderable.setModelHeight(model.getModelHeight());
 				}
 
-				if (!isVisible(model, pitchSin, pitchCos, yawSin, yawCos, x, y, z))
+				if (!isVisible(model, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x, mod_y, mod_z))
 				{
 					return;
 				}
 
 				model.calculateExtreme(orientation);
-				client.checkClickbox(model, orientation, pitchSin, pitchCos, yawSin, yawCos, x, y, z, hash);
+
+
+				client.checkClickbox(model, orientation, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x, mod_y, mod_z, hash);
 
 				targetBufferOffset += sceneUploader.pushSortedModel(
 						model, orientation,
-						pitchSin, pitchCos,
-						yawSin, yawCos,
+						mod_pitchSin, mod_pitchCos,
+						mod_yawSin, mod_yawCos,
 						x, y, z,
 						vertexBuffer, uvBuffer);
 			}
@@ -1565,13 +1570,13 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		{
 			Model model = (Model) renderable;
 
-			if (!isVisible(model, pitchSin, pitchCos, yawSin, yawCos, x, y, z))
+			if (!isVisible(model, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x,mod_y, mod_z))
 			{
 				return;
 			}
 
 			model.calculateExtreme(orientation);
-			client.checkClickbox(model, orientation, pitchSin, pitchCos, yawSin, yawCos, x, y, z, hash);
+			client.checkClickbox(model, orientation, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x, mod_y, mod_z, hash);
 
 			int tc = Math.min(MAX_TRIANGLE, model.getFaceCount());
 			int uvOffset = model.getUvBufferOffset();
@@ -1601,13 +1606,13 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 					renderable.setModelHeight(model.getModelHeight());
 				}
 
-				if (!isVisible(model, pitchSin, pitchCos, yawSin, yawCos, x, y, z))
+				if (!isVisible(model, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x, mod_y, mod_z))
 				{
 					return;
 				}
 
 				model.calculateExtreme(orientation);
-				client.checkClickbox(model, orientation, pitchSin, pitchCos, yawSin, yawCos, x, y, z, hash);
+				client.checkClickbox(model, orientation, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x, mod_y, mod_z, hash);
 
 				boolean hasUv = model.getFaceTextures() != null;
 

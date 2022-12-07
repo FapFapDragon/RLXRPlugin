@@ -25,6 +25,8 @@
 package rlxr;
 
 import com.google.common.base.Stopwatch;
+
+import java.util.ArrayList;
 import java.util.Arrays;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -71,7 +73,6 @@ class SceneUploader
 		uvoffset = 0;
 		vertexbuffer.clear();
 		uvBuffer.clear();
-
 		for (int z = 0; z < Constants.MAX_Z; ++z)
 		{
 			for (int x = 0; x < Constants.SCENE_SIZE; ++x)
