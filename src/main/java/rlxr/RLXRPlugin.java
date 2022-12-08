@@ -48,7 +48,16 @@ import net.runelite.api.*;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.NpcSpawned;
 import net.runelite.client.input.MouseManager;
-import rlxr.util.LocalPerspective;
+import org.apache.commons.lang3.ObjectUtils;
+
+//OpenXR Stuff
+import org.lwjgl.PointerBuffer;
+import org.lwjgl.openxr.*;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
+import rlxr.openxr.XrMatrix4x4f;
+import rlxr.openxr.XrProgram;
+
 
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.hooks.DrawCallbacks;
@@ -78,6 +87,7 @@ import org.lwjgl.system.Callback;
 import org.lwjgl.system.Configuration;
 import net.runelite.client.ui.overlay.OverlayManager;
 import rlxr.util.CameraControl;
+import rlxr.util.LocalPerspective;
 
 
 @PluginDescriptor(
@@ -273,6 +283,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 	private boolean lwjglInitted = false;
 
+	private XrProgram xr_program;
+
 	@Override
 	protected void startUp()
 	{
@@ -405,6 +417,12 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				camera_info = new CameraControl(client, config);
 				LocalPerspective.camera_control = camera_info;
 
+				//Attempt to initialize the openXR session, if it fails throw an error to close the plugin
+				this.xr_program = new XrProgram("Runelite XR Plugin", awtContext);
+				if (!this.xr_program.init())
+				{
+					throw new RuntimeException("Unable to initialize openXR");
+				}
 			}
 			catch (Throwable e)
 			{
@@ -486,6 +504,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 			// force main buffer provider rebuild to turn off alpha channel
 			client.resizeCanvas();
+
+			//Free and Destroy all the openXR Structs
+			this.xr_program.destroy();
 		});
 	}
 
@@ -1072,12 +1093,393 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	@Override
 	public void draw(int overlayColor)
 	{
+		drawToHeadset(overlayColor);
+		drawToScreen(overlayColor);
+	}
+
+	public boolean drawToHeadset(int overlayColor)
+	{
+		xr_program.checkEvents();
+
+		if (xr_program.xr_shutdown)
+		{
+			this.shutDown();
+			return false;
+		}
+
+		try (MemoryStack stack = MemoryStack.stackPush())
+		{
+			XrFrameState frame_state = XrFrameState.calloc();
+			frame_state.type(XR10.XR_TYPE_FRAME_STATE);
+			frame_state.next(MemoryUtil.NULL);
+
+			XrFrameWaitInfo frame_wait_info = XrFrameWaitInfo.calloc(stack);
+			frame_wait_info.next(MemoryUtil.NULL);
+			frame_wait_info.type(XR10.XR_TYPE_FRAME_WAIT_INFO);
+
+			if (!xr_program.checkXrResult(XR10.xrWaitFrame(xr_program.session, frame_wait_info, frame_state)))
+			{
+				System.out.println("Unable to wait frame");
+				this.shutDown();
+				return false;
+			}
+
+			XrViewLocateInfo view_locate_info = XrViewLocateInfo.calloc(stack);
+			view_locate_info.type(XR10.XR_TYPE_VIEW_LOCATE_INFO);
+			view_locate_info.next(MemoryUtil.NULL);
+			view_locate_info.viewConfigurationType(xr_program.view_type);
+			view_locate_info.displayTime(frame_state.predictedDisplayTime());
+			view_locate_info.space(xr_program.reference_space);
+
+			int view_count_raw = xr_program.xr_config_views.capacity();
+			XrView.Buffer views = new XrView.Buffer(stack.calloc(view_count_raw * XrView.SIZEOF));
+
+			for (int i =0; i < view_count_raw; i++)
+			{
+				views.get(i).type(XR10.XR_TYPE_VIEW);
+				views.get(i).next(MemoryUtil.NULL);
+			}
+
+			XrViewState view_state = XrViewState.calloc(stack);
+			view_state.type(XR10.XR_TYPE_VIEW_STATE);
+			view_state.next(MemoryUtil.NULL);
+			IntBuffer view_count = stack.callocInt(1);
+			if (!xr_program.checkXrResult(XR10.xrLocateViews(xr_program.session, view_locate_info, view_state, view_count, views)))
+			{
+				System.out.println("Unable To locate views");
+				return false;
+			}
+
+			XrFrameBeginInfo frame_begin_info = XrFrameBeginInfo.calloc(stack);
+			frame_begin_info.type(XR10.XR_TYPE_FRAME_BEGIN_INFO);
+			frame_begin_info.next(MemoryUtil.NULL);
+
+			if (!xr_program.checkXrResult(XR10.xrBeginFrame(xr_program.session, frame_begin_info)))
+			{
+				System.out.println("Unable To begin frame");
+				return false;
+			}
+
+			for (int i = 0; i < view_count_raw; i++)
+			{
+
+				XrMatrix4x4f Projection_matrix = new XrMatrix4x4f();
+				XrMatrix4x4f.CreateProjectionMatrix(Projection_matrix, XrMatrix4x4f.GraphicsAPI.GRAPHICS_OPENGL, views.get(i).fov(), xr_program.near_z, xr_program.far_z);
+				XrMatrix4x4f  view_matrix = new XrMatrix4x4f();
+				XrVector3f mod_pos = XrVector3f.calloc(stack);
+				XrVector3f pose = views.get(i).pose().position$();
+				mod_pos.x(pose.x() - camera_info.getCameraX2());
+				mod_pos.y(pose.y() - camera_info.getCameraY2());
+				mod_pos.z(pose.z() - camera_info.getCameraZ2());
+				//XrMatrix4x4f.CreateViewMatrix(view_matrix, views.get(i).pose().position$(), views.get(i).pose().orientation());
+				XrMatrix4x4f.CreateViewMatrix(view_matrix, mod_pos, views.get(i).pose().orientation());
+				//Wait to aquire swapchain info
+				XrSwapchainImageAcquireInfo swapchain_image_aquire_info = XrSwapchainImageAcquireInfo.calloc(stack);
+				swapchain_image_aquire_info.type(XR10.XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO);
+				swapchain_image_aquire_info.next(MemoryUtil.NULL);
+
+				IntBuffer index = stack.callocInt(1);
+
+				if (!xr_program.checkXrResult(XR10.xrAcquireSwapchainImage(xr_program.swapchains.get(i), swapchain_image_aquire_info, index)))
+				{
+					System.out.println("Unable to aquire swapchain image index");
+					return false;
+				}
+
+				XrSwapchainImageWaitInfo swapchain_image_wait_info = XrSwapchainImageWaitInfo.calloc(stack);
+				swapchain_image_wait_info.type(XR10.XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO);
+				swapchain_image_wait_info.next(MemoryUtil.NULL);
+				swapchain_image_wait_info.timeout(1000);
+
+				if (!xr_program.checkXrResult(XR10.xrWaitSwapchainImage(xr_program.swapchains.get(i), swapchain_image_wait_info)))
+				{
+					System.out.println("Unable to wait for swapchain image");
+					return false;
+				}
+
+				IntBuffer depth_index =  stack.callocInt(1);
+				depth_index.put( 0,Integer.MAX_VALUE);
+
+				if (xr_program.depth_swapchain_format != -1)
+				{
+					XrSwapchainImageAcquireInfo depth_swapchain_image_aquire_info = XrSwapchainImageAcquireInfo.calloc(stack);
+					depth_swapchain_image_aquire_info.type(XR10.XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO);
+					depth_swapchain_image_aquire_info.next(MemoryUtil.NULL);
+
+					if (!xr_program.checkXrResult(XR10.xrAcquireSwapchainImage(xr_program.depth_swapchains.get(i), depth_swapchain_image_aquire_info, depth_index)))
+					{
+						System.out.println("Unable to aquire depth swapchain Image Index");
+						return false;
+					}
+
+					XrSwapchainImageWaitInfo depth_swapchain_image_wait_info = XrSwapchainImageWaitInfo.calloc(stack);
+					depth_swapchain_image_wait_info.type(XR10.XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO);
+					depth_swapchain_image_wait_info.next(MemoryUtil.NULL);
+					depth_swapchain_image_wait_info.timeout(1000);
+					if (!xr_program.checkXrResult(XR10.xrWaitSwapchainImage(xr_program.depth_swapchains.get(i), depth_swapchain_image_wait_info)))
+					{
+						System.out.println("Unable to wait for depth swapchain image");
+						return false;
+					}
+				}
+				xr_program.projection_views.get(i).fov( views.get(i).fov());
+				xr_program.projection_views.get(i).pose(views.get(i).pose());
+
+				int depth_image = (xr_program.depth_swapchain_format != -1) ? xr_program.depth_images.get(i).get(depth_index.get(0)).image() : Integer.MAX_VALUE;
+				int image =  xr_program.images.get(i).get(index.get(0));
+
+				//Change how things are rendered
+				//boolean result = renderFrame(this.xr_config_views.get(i).recommendedImageRectWidth(), this.xr_config_views.get(i).recommendedImageRectHeight(), Projection_matrix, view_matrix, frame_buffers.get(i).get(index.get(0)), depth_image, image, frame_state.predictedDisplayTime());
+				boolean result = drawToEye(xr_program.xr_config_views.get(i).recommendedImageRectWidth(), xr_program.xr_config_views.get(i).recommendedImageRectHeight(), Projection_matrix, view_matrix, xr_program.frame_buffers.get(i).get(index.get(0)), depth_image, image, frame_state.predictedDisplayTime());
+				if (!result)
+				{
+					System.out.println("Unable to render Frame");
+					return false;
+				}
+
+				GL43C.glFinish();
+
+				XrSwapchainImageReleaseInfo swapchain_image_release_info = XrSwapchainImageReleaseInfo.calloc(stack);
+				swapchain_image_release_info.type(XR10.XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO);
+				swapchain_image_release_info.next(MemoryUtil.NULL);
+
+				if (!xr_program.checkXrResult(XR10.xrReleaseSwapchainImage(xr_program.swapchains.get(i), swapchain_image_release_info)))
+				{
+					System.out.println("Unable to release swapchain Image");
+					return false;
+				}
+
+				if (xr_program.depth_swapchain_format != -1)
+				{
+					XrSwapchainImageReleaseInfo depth_swapchain_image_release_info = XrSwapchainImageReleaseInfo.calloc(stack);
+					depth_swapchain_image_release_info.type(XR10.XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO);
+					depth_swapchain_image_release_info.next(MemoryUtil.NULL);
+
+					if (!xr_program.checkXrResult(XR10.xrReleaseSwapchainImage(xr_program.depth_swapchains.get(i), depth_swapchain_image_release_info)))
+					{
+						System.out.println("Unable to release depth swapchain Image");
+						return false;
+					}
+				}
+			}
+			XrCompositionLayerProjection projection_layer = XrCompositionLayerProjection.calloc(stack);
+			projection_layer.type(XR10.XR_TYPE_COMPOSITION_LAYER_PROJECTION);
+			projection_layer.next(MemoryUtil.NULL);
+			projection_layer.layerFlags(0);
+			projection_layer.space(xr_program.reference_space);
+			projection_layer.views(xr_program.projection_views);
+
+			XrCompositionLayerBaseHeader compositionLayers = XrCompositionLayerBaseHeader.create(projection_layer);
+
+			PointerBuffer layers = stack.callocPointer(1);
+
+			layers.put(0, compositionLayers);
+			XrFrameEndInfo frame_end_info = XrFrameEndInfo.calloc(stack);
+			frame_end_info.type(XR10.XR_TYPE_FRAME_END_INFO);
+			frame_end_info.next(MemoryUtil.NULL);
+			frame_end_info.displayTime(frame_state.predictedDisplayTime());
+			frame_end_info.environmentBlendMode(XR10.XR_ENVIRONMENT_BLEND_MODE_OPAQUE);
+			frame_end_info.layerCount(1);
+			frame_end_info.layers(layers);
+
+			if (!xr_program.checkXrResult(XR10.xrEndFrame(xr_program.session, frame_end_info)))
+			{
+				System.out.println("Unable to End Frame");
+				return false;
+			}
+		}
+		return true;
+	}
+
+	public boolean drawToEye(int width, int height, XrMatrix4x4f perspective_matrix, XrMatrix4x4f view_matrix, int frame_buffer, int depth_buffer, int image, long predicted_time)
+	{
 		final int canvasHeight = client.getCanvasHeight();
 		final int canvasWidth = client.getCanvasWidth();
 
 		final int viewportHeight = client.getViewportHeight();
 		final int viewportWidth = client.getViewportWidth();
 
+		//Not Drawing UI Right Now
+		//prepareInterfaceTexture(canvasWidth, canvasHeight);
+
+		// Setup anti-aliasing
+		final AntiAliasingMode antiAliasingMode = config.antiAliasingMode();
+		final boolean aaEnabled = antiAliasingMode != AntiAliasingMode.DISABLED;
+
+
+		GL43C.glDisable(GL43C.GL_MULTISAMPLE);
+		shutdownAAFbo();
+
+		lastAntiAliasingMode = antiAliasingMode;
+
+		// Clear scene
+		GL43C.glBindFramebuffer(GL43C.GL_FRAMEBUFFER, frame_buffer);
+		GL43C.glViewport(0, 0, width, height);
+		GL43C.glScissor(0, 0, width, height);
+		GL43C.glFramebufferTexture2D(GL43C.GL_FRAMEBUFFER, GL43C.GL_COLOR_ATTACHMENT0, GL43C.GL_TEXTURE_2D, image, 0);
+
+		int sky = client.getSkyboxColor();
+		GL43C.glClearColor((sky >> 16 & 0xFF) / 255f, (sky >> 8 & 0xFF) / 255f, (sky & 0xFF) / 255f, 1f);
+		GL43C.glClear(GL43C.GL_COLOR_BUFFER_BIT);
+
+		// Draw 3d scene
+		final GameState gameState = client.getGameState();
+		if (gameState.getState() >= GameState.LOADING.getState())
+		{
+			final TextureProvider textureProvider = client.getTextureProvider();
+			if (textureArrayId == -1)
+			{
+				// lazy init textures as they may not be loaded at plugin start.
+				// this will return -1 and retry if not all textures are loaded yet, too.
+				textureArrayId = textureManager.initTextureArray(textureProvider);
+				if (textureArrayId > -1)
+				{
+					// if texture upload is successful, compute and set texture animations
+					float[] texAnims = textureManager.computeTextureAnimations(textureProvider);
+					GL43C.glUseProgram(glProgram);
+					GL43C.glUniform2fv(uniTextureAnimations, texAnims);
+					GL43C.glUseProgram(0);
+				}
+			}
+
+			int renderWidthOff = viewportOffsetX;
+			int renderHeightOff = viewportOffsetY;
+			int renderCanvasHeight = canvasHeight;
+			int renderViewportHeight = viewportHeight;
+			int renderViewportWidth = viewportWidth;
+
+			// Setup anisotropic filtering
+			final int anisotropicFilteringLevel = config.anisotropicFilteringLevel();
+
+			if (textureArrayId != -1 && lastAnisotropicFilteringLevel != anisotropicFilteringLevel)
+			{
+				textureManager.setAnisotropicFilteringLevel(textureArrayId, anisotropicFilteringLevel);
+				lastAnisotropicFilteringLevel = anisotropicFilteringLevel;
+			}
+
+			//glDpiAwareViewport(renderWidthOff, renderCanvasHeight - renderViewportHeight - renderHeightOff, renderViewportWidth, renderViewportHeight);
+
+			GL43C.glUseProgram(glProgram);
+
+			final int drawDistance = getDrawDistance();
+			final int fogDepth = config.fogDepth();
+			GL43C.glUniform1i(uniUseFog, fogDepth > 0 ? 1 : 0);
+			GL43C.glUniform4f(uniFogColor, (sky >> 16 & 0xFF) / 255f, (sky >> 8 & 0xFF) / 255f, (sky & 0xFF) / 255f, 1f);
+			GL43C.glUniform1i(uniFogDepth, fogDepth);
+			GL43C.glUniform1i(uniDrawDistance, drawDistance * LocalPerspective.LOCAL_TILE_SIZE);
+
+			// Brightness happens to also be stored in the texture provider, so we use that
+			GL43C.glUniform1f(uniBrightness, (float) textureProvider.getBrightness());
+			GL43C.glUniform1f(uniSmoothBanding, config.smoothBanding() ? 0f : 1f);
+			GL43C.glUniform1i(uniColorBlindMode, config.colorBlindMode().ordinal());
+			GL43C.glUniform1f(uniTextureLightMode, config.brightTextures() ? 1f : 0f);
+			if (gameState == GameState.LOGGED_IN)
+			{
+				// avoid textures animating during loading
+				GL43C.glUniform1i(uniTick, client.getGameCycle());
+			}
+
+			// Calculate projection matrix
+			float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
+			Mat4.mul(projectionMatrix, Mat4.projection(viewportWidth, viewportHeight, 50));
+			Mat4.mul(projectionMatrix, Mat4.rotateX((float) -(Math.PI - camera_info.getCameraPitch() * LocalPerspective.UNIT)));
+			Mat4.mul(projectionMatrix, Mat4.rotateY((float) (camera_info.getCameraYaw() * LocalPerspective.UNIT)));
+
+
+
+			//This is the only place you need to change the Camera Values??
+			Mat4.mul(projectionMatrix, Mat4.translate(-camera_info.getCameraX2(), -camera_info.getCameraY2(), -camera_info.getCameraZ2()));
+			XrMatrix4x4f vp_matrix = new XrMatrix4x4f();
+			XrMatrix4x4f.Multiply(vp_matrix, perspective_matrix, view_matrix);
+			float vala[] = vp_matrix.toFloatArray();
+			//GL43C.glUniformMatrix4fv(uniProjectionMatrix, false, vp_matrix.toFloatArray());
+			GL43C.glUniformMatrix4fv(uniProjectionMatrix, false, projectionMatrix);
+
+			// Bind uniforms
+			GL43C.glUniformBlockBinding(glProgram, uniBlockMain, 0);
+			GL43C.glUniform1i(uniTextures, 1); // texture sampler array is bound to texture1
+
+			// We just allow the GL to do face culling. Note this requires the priority renderer
+			// to have logic to disregard culled faces in the priority depth testing.
+			GL43C.glEnable(GL43C.GL_CULL_FACE);
+
+			// Enable blending for alpha
+			//GL43C.glEnable(GL43C.GL_BLEND);
+			//GL43C.glBlendFuncSeparate(GL43C.GL_SRC_ALPHA, GL43C.GL_ONE_MINUS_SRC_ALPHA, GL43C.GL_ONE, GL43C.GL_ONE);
+
+			// Draw buffers
+			GL43C.glBindVertexArray(vaoHandle);
+
+			int vertexBuffer, uvBuffer;
+			if (computeMode != ComputeMode.NONE)
+			{
+				if (computeMode == ComputeMode.OPENGL)
+				{
+					// Before reading the SSBOs written to from postDrawScene() we must insert a barrier
+					GL43C.glMemoryBarrier(GL43C.GL_SHADER_STORAGE_BARRIER_BIT);
+				}
+				else
+				{
+					// Wait for the command queue to finish, so that we know the compute is done
+					openCLManager.finish();
+				}
+
+				// Draw using the output buffer of the compute
+				vertexBuffer = tmpOutBuffer.glBufferId;
+				uvBuffer = tmpOutUvBuffer.glBufferId;
+			}
+			else
+			{
+				// Only use the temporary buffers, which will contain the full scene
+				vertexBuffer = tmpVertexBuffer.glBufferId;
+				uvBuffer = tmpUvBuffer.glBufferId;
+			}
+
+			GL43C.glEnableVertexAttribArray(0);
+			GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, vertexBuffer);
+			GL43C.glVertexAttribIPointer(0, 4, GL43C.GL_INT, 0, 0);
+
+			GL43C.glEnableVertexAttribArray(1);
+			GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, uvBuffer);
+			GL43C.glVertexAttribPointer(1, 4, GL43C.GL_FLOAT, false, 0, 0);
+
+			GL43C.glDrawArrays(GL43C.GL_TRIANGLES, 0, targetBufferOffset);
+
+			GL43C.glDisable(GL43C.GL_BLEND);
+			GL43C.glDisable(GL43C.GL_CULL_FACE);
+
+			GL43C.glUseProgram(0);
+		}
+
+		//Don't clear anything but may need to rewind buffers
+		/*
+		vertexBuffer.clear();
+		uvBuffer.clear();
+		modelBuffer.clear();
+		modelBufferSmall.clear();
+		modelBufferUnordered.clear();
+
+		smallModels = largeModels = unorderedModels = 0;
+		tempOffset = 0;
+		tempUvOffset = 0;
+		*/
+		// Texture on UI should be done with Quad composition Layer if at all
+		//drawUi(overlayColor, canvasHeight, canvasWidth);
+
+		GL43C.glBindFramebuffer(GL43C.GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
+
+		return true;
+	}
+
+	public void drawToScreen(int overlayColor)
+	{
+		final int canvasHeight = client.getCanvasHeight();
+		final int canvasWidth = client.getCanvasWidth();
+
+		final int viewportHeight = client.getViewportHeight();
+		final int viewportWidth = client.getViewportWidth();
+
+		//Not Drawing UI Right Now
 		prepareInterfaceTexture(canvasWidth, canvasHeight);
 
 		// Setup anti-aliasing

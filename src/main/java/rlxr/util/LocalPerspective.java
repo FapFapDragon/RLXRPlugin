@@ -47,7 +47,6 @@ import net.runelite.api.model.Jarvis;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetInfo;
 import rlxr.RLXRConfig;
-import rlxr.util.CameraControl;
 
 // Extra Imports
 
