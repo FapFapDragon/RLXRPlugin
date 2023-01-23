@@ -752,13 +752,13 @@ public class LocalPerspective
     {
         m.calculateExtreme(jauOrient);
 
-        int x1 = m.getCenterX();
-        int y1 = m.getCenterZ();
-        int z1 = m.getCenterY();
+        int x1 = m.getAABB(jauOrient).getCenterX();
+        int y1 = m.getAABB(jauOrient).getCenterZ();
+        int z1 = m.getAABB(jauOrient).getCenterY();
 
-        int ex = m.getExtremeX();
-        int ey = m.getExtremeZ();
-        int ez = m.getExtremeY();
+        int ex = m.getAABB(jauOrient).getExtremeX();
+        int ey = m.getAABB(jauOrient).getExtremeZ();
+        int ez = m.getAABB(jauOrient).getExtremeY();
 
         int x2 = x1 + ex;
         int y2 = y1 + ey;

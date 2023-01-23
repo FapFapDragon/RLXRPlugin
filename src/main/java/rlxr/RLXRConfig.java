@@ -178,6 +178,30 @@ public interface RLXRConfig extends Config
 	)
 	default int CameraZOffset() {return 0;}
 
+	@Range(
+			min = -150,
+			max = Integer.MAX_VALUE
+	)
+	@ConfigItem(
+			keyName = "XRLenseOffset",
+			name = "XR Offset",
+			description = "Sets The XR Offset.",
+			position = 16
+	)
+	default int XRLenseOffset() {return 0;}
+
+	@Range(
+			min = 100,
+			max = Integer.MAX_VALUE
+	)
+	@ConfigItem(
+			keyName = "XRFOVScale",
+			name = "XR FOV Scale",
+			description = "Sets The XR FOV Scale.",
+			position = 17
+	)
+	default int XrFOVScale() {return 100;}
+
 	@ConfigItem(
 			keyName = "colorBlindMode",
 			name = "Colorblindness Correction",

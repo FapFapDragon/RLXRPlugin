@@ -3,6 +3,7 @@ package rlxr.openxr;
 import org.lwjgl.openxr.XrFovf;
 import org.lwjgl.openxr.XrQuaternionf;
 import org.lwjgl.openxr.XrVector3f;
+import rlxr.RLXRConfig;
 
 
 public class XrMatrix4x4f {
@@ -15,7 +16,7 @@ public class XrMatrix4x4f {
 
     }
 
-    public static void CreateProjectionMatrix(XrMatrix4x4f result, GraphicsAPI graphicsapi, XrFovf fov, float nearZ, float farZ)
+    public static void CreateProjectionMatrix(XrMatrix4x4f result, GraphicsAPI graphicsapi, XrFovf fov, float nearZ, float farZ, int fovScale, float XRModifier)
     {
         float tanLeft  = (float)Math.tan(fov.angleLeft());
         float tanRight = (float)Math.tan(fov.angleRight());
@@ -23,10 +24,10 @@ public class XrMatrix4x4f {
         float tanDown  = (float)Math.tan(fov.angleDown());
         float tanUp    = (float)Math.tan(fov.angleUp());
 
-        CreateProjectionMatrix(result, graphicsapi, tanLeft, tanRight, tanUp, tanDown, nearZ, farZ);
+        CreateProjectionMatrix(result, graphicsapi, tanLeft * (100f / fovScale), tanRight * (100f / fovScale), tanUp * (100f / fovScale), tanDown * (100f / fovScale), nearZ, farZ, XRModifier);
     }
 
-    public static void CreateProjectionMatrix(XrMatrix4x4f result, GraphicsAPI graphicsapi, float tanAngleLeft,float tanAngleRight,float tanAngleUp,float tanAngleDown, float nearZ, float farZ)
+    public static void CreateProjectionMatrix(XrMatrix4x4f result, GraphicsAPI graphicsapi, float tanAngleLeft,float tanAngleRight,float tanAngleUp,float tanAngleDown, float nearZ, float farZ, float XRModifier)
     {
         // Creates a projection matrix based on the specified dimensions.
         // The projection matrix transforms -Z=forward, +Y=up, +X=right to the appropriate clip space for the graphics API.
@@ -66,7 +67,7 @@ public class XrMatrix4x4f {
 
             result.m[3] = 0.0f;
             result.m[7] = 0.0f;
-            result.m[11] = -1.0f;
+            result.m[11] = -2 * 50;
             result.m[15] = 0.0f;
         }
         else
@@ -84,12 +85,12 @@ public class XrMatrix4x4f {
 
             result.m[2] = 0.0f;
             result.m[6] = 0.0f;
-            result.m[10] = -(farZ + offsetZ) / (farZ - nearZ);
+            result.m[10] = -(farZ + offsetZ) / (farZ - nearZ) ;
             result.m[14] = -(farZ * (nearZ + offsetZ)) / (farZ - nearZ);
 
             result.m[3] = 0.0f;
             result.m[7] = 0.0f;
-            result.m[11] = -1.0f;
+            result.m[11] = -150 + XRModifier; //Convergence
             result.m[15] = 0.0f;
         }
     }
@@ -221,6 +222,49 @@ public class XrMatrix4x4f {
                         (matrix.m[4 * r1 + c0] * matrix.m[4 * r2 + c2] - matrix.m[4 * r2 + c0] * matrix.m[4 * r1 + c2]) +
                 matrix.m[4 * r0 + c2] *
                         (matrix.m[4 * r1 + c0] * matrix.m[4 * r2 + c1] - matrix.m[4 * r2 + c0] * matrix.m[4 * r1 + c1]);
+    }
+
+    public static void transpose(XrMatrix4x4f result, XrMatrix4x4f src)
+    {
+
+        result.m[0] = src.m[0];
+        result.m[1] = src.m[4];
+        result.m[2] = src.m[8];
+        result.m[3] = src.m[12];
+
+        result.m[4] = src.m[1];
+        result.m[5] = src.m[5];
+        result.m[6] = src.m[9];
+        result.m[7] = src.m[13];
+
+        result.m[8] = src.m[2];
+        result.m[9] = src.m[6];
+        result.m[10] = src.m[10];
+        result.m[11] = src.m[14];
+
+        result.m[12] = src.m[3];
+        result.m[13] = src.m[7];
+        result.m[14] = src.m[11];
+        result.m[15] = src.m[15];
+    }
+
+    public static void CreateScale(XrMatrix4x4f result, float x, float y, float z) {
+        result.m[0] = x;
+        result.m[1] = 0.0f;
+        result.m[2] = 0.0f;
+        result.m[3] = 0.0f;
+        result.m[4] = 0.0f;
+        result.m[5] = y;
+        result.m[6] = 0.0f;
+        result.m[7] = 0.0f;
+        result.m[8] = 0.0f;
+        result.m[9] = 0.0f;
+        result.m[10] = z;
+        result.m[11] = 0.0f;
+        result.m[12] = 0.0f;
+        result.m[13] = 0.0f;
+        result.m[14] = 0.0f;
+        result.m[15] = 1.0f;
     }
 
     public float[] toFloatArray()

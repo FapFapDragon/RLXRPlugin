@@ -1162,15 +1162,14 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 			for (int i = 0; i < view_count_raw; i++)
 			{
-
 				XrMatrix4x4f Projection_matrix = new XrMatrix4x4f();
-				XrMatrix4x4f.CreateProjectionMatrix(Projection_matrix, XrMatrix4x4f.GraphicsAPI.GRAPHICS_OPENGL, views.get(i).fov(), xr_program.near_z, xr_program.far_z);
+				XrMatrix4x4f.CreateProjectionMatrix(Projection_matrix, XrMatrix4x4f.GraphicsAPI.GRAPHICS_OPENGL, views.get(i).fov(), xr_program.near_z, xr_program.far_z, config.XrFOVScale(), config.XRLenseOffset());
 				XrMatrix4x4f  view_matrix = new XrMatrix4x4f();
 				XrVector3f mod_pos = XrVector3f.calloc(stack);
 				XrVector3f pose = views.get(i).pose().position$();
-				mod_pos.x(pose.x() - camera_info.getCameraX2());
-				mod_pos.y(pose.y() - camera_info.getCameraY2());
-				mod_pos.z(pose.z() - camera_info.getCameraZ2());
+				mod_pos.x(camera_info.getCameraX2() + (pose.x() * 50));
+				mod_pos.y(camera_info.getCameraY2() + (pose.y() * 50));
+				mod_pos.z(camera_info.getCameraZ2() + (pose.z() * 50));
 				//XrMatrix4x4f.CreateViewMatrix(view_matrix, views.get(i).pose().position$(), views.get(i).pose().orientation());
 				XrMatrix4x4f.CreateViewMatrix(view_matrix, mod_pos, views.get(i).pose().orientation());
 				//Wait to aquire swapchain info
@@ -1230,7 +1229,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 				//Change how things are rendered
 				//boolean result = renderFrame(this.xr_config_views.get(i).recommendedImageRectWidth(), this.xr_config_views.get(i).recommendedImageRectHeight(), Projection_matrix, view_matrix, frame_buffers.get(i).get(index.get(0)), depth_image, image, frame_state.predictedDisplayTime());
-				boolean result = drawToEye(xr_program.xr_config_views.get(i).recommendedImageRectWidth(), xr_program.xr_config_views.get(i).recommendedImageRectHeight(), Projection_matrix, view_matrix, xr_program.frame_buffers.get(i).get(index.get(0)), depth_image, image, frame_state.predictedDisplayTime());
+				boolean result = drawToEye(xr_program.xr_config_views.get(i).recommendedImageRectWidth(), xr_program.xr_config_views.get(i).recommendedImageRectHeight(), Projection_matrix, view_matrix, xr_program.frame_buffers.get(i).get(index.get(0)), depth_image, image, frame_state.predictedDisplayTime(), views.get(i).pose());
 				if (!result)
 				{
 					System.out.println("Unable to render Frame");
@@ -1291,7 +1290,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		return true;
 	}
 
-	public boolean drawToEye(int width, int height, XrMatrix4x4f perspective_matrix, XrMatrix4x4f view_matrix, int frame_buffer, int depth_buffer, int image, long predicted_time)
+	public boolean drawToEye(int width, int height, XrMatrix4x4f perspective_matrix, XrMatrix4x4f view_matrix, int frame_buffer, int depth_buffer, int image, long predicted_time, XrPosef pose)
 	{
 		final int canvasHeight = client.getCanvasHeight();
 		final int canvasWidth = client.getCanvasWidth();
@@ -1381,18 +1380,15 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 			// Calculate projection matrix
 			float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
-			Mat4.mul(projectionMatrix, Mat4.projection(viewportWidth, viewportHeight, 50));
-			Mat4.mul(projectionMatrix, Mat4.rotateX((float) -(Math.PI - camera_info.getCameraPitch() * LocalPerspective.UNIT)));
-			Mat4.mul(projectionMatrix, Mat4.rotateY((float) (camera_info.getCameraYaw() * LocalPerspective.UNIT)));
 
-
-
-			//This is the only place you need to change the Camera Values??
-			Mat4.mul(projectionMatrix, Mat4.translate(-camera_info.getCameraX2(), -camera_info.getCameraY2(), -camera_info.getCameraZ2()));
 			XrMatrix4x4f vp_matrix = new XrMatrix4x4f();
 			XrMatrix4x4f.Multiply(vp_matrix, perspective_matrix, view_matrix);
-			float vala[] = vp_matrix.toFloatArray();
-			//GL43C.glUniformMatrix4fv(uniProjectionMatrix, false, vp_matrix.toFloatArray());
+			XrMatrix4x4f transposeVP = new XrMatrix4x4f();
+			//XrMatrix4x4f.transpose(transposeVP, vp_matrix);
+			Mat4.mul(projectionMatrix, vp_matrix.toFloatArray());
+
+
+
 			GL43C.glUniformMatrix4fv(uniProjectionMatrix, false, projectionMatrix);
 
 			// Bind uniforms
