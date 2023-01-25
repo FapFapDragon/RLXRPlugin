@@ -184,7 +184,7 @@ public class XrProgram {
             app_info.engineVersion(1);
             app_info.apiVersion(XR10.XR_CURRENT_API_VERSION);
             app_info.applicationVersion(1);
-            app_info.applicationName(stack.UTF8Safe("LWJGL OpenXR Program"));
+            app_info.applicationName(stack.UTF8Safe(this.application_name));
 
             if (!checkExtensionSupport())
             {
