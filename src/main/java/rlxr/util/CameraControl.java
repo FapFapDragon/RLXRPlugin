@@ -25,8 +25,6 @@ import java.util.List;
 
 public class CameraControl  {
 
-
-    KeyListener key_listener;
     @Inject
     private RLXRPlugin plugin;
 
