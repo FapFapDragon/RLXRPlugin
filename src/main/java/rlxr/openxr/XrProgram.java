@@ -25,7 +25,6 @@ import static org.lwjgl.system.MemoryUtil.*;
 
 public class XrProgram {
     private String application_name;
-
     private AWTContext awtContext;
 
     public XrInstance instance;

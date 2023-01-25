@@ -179,7 +179,7 @@ public interface RLXRConfig extends Config
 	default int CameraZOffset() {return 0;}
 
 	@Range(
-			min = -150,
+			min = -600,
 			max = Integer.MAX_VALUE
 	)
 	@ConfigItem(
@@ -191,7 +191,7 @@ public interface RLXRConfig extends Config
 	default int XRLenseOffset() {return 0;}
 
 	@Range(
-			min = 100,
+			min = 1,
 			max = Integer.MAX_VALUE
 	)
 	@ConfigItem(

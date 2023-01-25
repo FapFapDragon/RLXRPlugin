@@ -40,6 +40,8 @@ import java.nio.IntBuffer;
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
+import javax.swing.text.View;
+
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import net.runelite.api.*;
@@ -85,7 +87,6 @@ import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.GLUtil;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.Configuration;
-import net.runelite.client.ui.overlay.OverlayManager;
 import rlxr.util.CameraControl;
 import rlxr.util.LocalPerspective;
 
@@ -135,9 +136,6 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 	@Inject
 	private MouseManager mouseManager;
-
-	@Inject
-	private OverlayManager overlayManager;
 
 	public enum ComputeMode
 	{
@@ -1164,6 +1162,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			{
 				XrMatrix4x4f Projection_matrix = new XrMatrix4x4f();
 				XrMatrix4x4f.CreateProjectionMatrix(Projection_matrix, XrMatrix4x4f.GraphicsAPI.GRAPHICS_OPENGL, views.get(i).fov(), xr_program.near_z, xr_program.far_z, config.XrFOVScale(), config.XRLenseOffset());
+
 				XrMatrix4x4f  view_matrix = new XrMatrix4x4f();
 				XrVector3f mod_pos = XrVector3f.calloc(stack);
 				XrVector3f pose = views.get(i).pose().position$();
@@ -1171,7 +1170,19 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				mod_pos.y(camera_info.getCameraY2() + (pose.y() * 50));
 				mod_pos.z(camera_info.getCameraZ2() + (pose.z() * 50));
 				//XrMatrix4x4f.CreateViewMatrix(view_matrix, views.get(i).pose().position$(), views.get(i).pose().orientation());
-				XrMatrix4x4f.CreateViewMatrix(view_matrix, mod_pos, views.get(i).pose().orientation());
+
+				XrQuaternionf orient = views.get(i).pose().orientation();
+				XrQuaternionf halfrotate = XrQuaternionf.calloc(stack);
+				halfrotate.x(0);
+				halfrotate.y(0);
+				halfrotate.z(1);
+				halfrotate.w(0);
+				XrQuaternionf result_store = XrQuaternionf.calloc(stack);
+
+				XrMatrix4x4f.MultiplyQuaternion(result_store, orient, halfrotate);
+
+				XrMatrix4x4f.CreateViewMatrix(view_matrix, mod_pos, result_store);
+
 				//Wait to aquire swapchain info
 				XrSwapchainImageAcquireInfo swapchain_image_aquire_info = XrSwapchainImageAcquireInfo.calloc(stack);
 				swapchain_image_aquire_info.type(XR10.XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO);
@@ -1382,11 +1393,12 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
 
 			XrMatrix4x4f vp_matrix = new XrMatrix4x4f();
+
 			XrMatrix4x4f.Multiply(vp_matrix, perspective_matrix, view_matrix);
 			XrMatrix4x4f transposeVP = new XrMatrix4x4f();
 			//XrMatrix4x4f.transpose(transposeVP, vp_matrix);
+			//XrMatrix4x4f.CreateScale(transposeVP, 1, -1, 1);
 			Mat4.mul(projectionMatrix, vp_matrix.toFloatArray());
-
 
 
 			GL43C.glUniformMatrix4fv(uniProjectionMatrix, false, projectionMatrix);
@@ -1400,8 +1412,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			GL43C.glEnable(GL43C.GL_CULL_FACE);
 
 			// Enable blending for alpha
-			//GL43C.glEnable(GL43C.GL_BLEND);
-			//GL43C.glBlendFuncSeparate(GL43C.GL_SRC_ALPHA, GL43C.GL_ONE_MINUS_SRC_ALPHA, GL43C.GL_ONE, GL43C.GL_ONE);
+			GL43C.glEnable(GL43C.GL_BLEND);
+			GL43C.glBlendFuncSeparate(GL43C.GL_SRC_ALPHA, GL43C.GL_ONE_MINUS_SRC_ALPHA, GL43C.GL_ONE, GL43C.GL_ONE);
 
 			// Draw buffers
 			GL43C.glBindVertexArray(vaoHandle);

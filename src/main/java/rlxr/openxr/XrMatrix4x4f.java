@@ -99,7 +99,6 @@ public class XrMatrix4x4f {
     {
         XrMatrix4x4f rotationMatrix = new XrMatrix4x4f();
         CreateFromQuaternion(rotationMatrix, rotation);
-
         XrMatrix4x4f translationMatrix = new XrMatrix4x4f();
         CreateTranslation(translationMatrix, translation.x(), translation.y(), translation.z());
 
@@ -265,6 +264,14 @@ public class XrMatrix4x4f {
         result.m[13] = 0.0f;
         result.m[14] = 0.0f;
         result.m[15] = 1.0f;
+    }
+
+    public static void MultiplyQuaternion(XrQuaternionf result, XrQuaternionf a, XrQuaternionf b)
+    {
+        result.x( (b.w() * a.x()) + (b.x() * a.w()) + (b.y() * a.z()) - (b.z() * a.y()));
+        result.y( (b.w() * a.y()) - (b.x() * a.z()) + (b.y() * a.w()) + (b.z() * a.x()));
+        result.z((b.w() * a.z()) + (b.x() * a.y()) - (b.y() * a.x()) + (b.z() * a.w()));
+        result.w( (b.w() * a.w()) - (b.x() * a.x()) - (b.y() * a.y()) - (b.z() * a.z()));
     }
 
     public float[] toFloatArray()
