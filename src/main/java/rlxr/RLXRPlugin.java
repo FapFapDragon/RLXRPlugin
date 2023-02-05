@@ -1390,7 +1390,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			}
 
 			// Calculate projection matrix
-			float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
+			int scale = 497;
+			//float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
+			float[] projectionMatrix = Mat4.scale(scale, scale, 1);
 
 			XrMatrix4x4f vp_matrix = new XrMatrix4x4f();
 
