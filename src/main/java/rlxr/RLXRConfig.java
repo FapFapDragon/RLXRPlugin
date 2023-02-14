@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018, Adam <Adam@sigterm.info>
+ * Copyright (c) 2023, FapFapDragon <tdgames29@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
