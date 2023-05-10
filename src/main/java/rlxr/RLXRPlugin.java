@@ -1032,14 +1032,15 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		{
 			targetBufferOffset += sceneUploader.upload(model,
 					tileX, tileY,
+					tileX << Perspective.LOCAL_COORD_BITS, tileY << Perspective.LOCAL_COORD_BITS,
 					vertexBuffer, uvBuffer,
-					tileX << LocalPerspective.LOCAL_COORD_BITS, tileY << LocalPerspective.LOCAL_COORD_BITS, true);
+					true);
 		}
 		else if (model.getBufferLen() > 0)
 		{
-			final int localX = tileX * LocalPerspective.LOCAL_TILE_SIZE;
+			final int localX = tileX << Perspective.LOCAL_COORD_BITS;
 			final int localY = 0;
-			final int localZ = tileY * LocalPerspective.LOCAL_TILE_SIZE;
+			final int localZ = tileY << Perspective.LOCAL_COORD_BITS;
 
 			GpuIntBuffer b = modelBufferUnordered;
 			++unorderedModels;
