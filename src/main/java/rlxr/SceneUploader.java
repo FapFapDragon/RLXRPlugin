@@ -23,10 +23,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 package rlxr;
-
 import com.google.common.base.Stopwatch;
-
-import java.util.ArrayList;
 import java.util.Arrays;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -37,8 +34,7 @@ import net.runelite.api.DecorativeObject;
 import net.runelite.api.GameObject;
 import net.runelite.api.GroundObject;
 import net.runelite.api.Model;
-//import net.runelite.api.Perspective;
-import rlxr.util.LocalPerspective;
+import net.runelite.api.Perspective;
 import net.runelite.api.Point;
 import net.runelite.api.Renderable;
 import net.runelite.api.Scene;
@@ -46,7 +42,6 @@ import net.runelite.api.SceneTileModel;
 import net.runelite.api.SceneTilePaint;
 import net.runelite.api.Tile;
 import net.runelite.api.WallObject;
-import rlxr.util.CameraControl;
 
 @Singleton
 @Slf4j
@@ -78,7 +73,7 @@ class SceneUploader
 					Tile tile = scene.getTiles()[z][x][y];
 					if (tile != null)
 					{
-						upload(tile, vertexbuffer, uvBuffer);
+						upload(scene, tile, vertexbuffer, uvBuffer);
 					}
 				}
 			}
@@ -88,12 +83,12 @@ class SceneUploader
 		log.debug("Scene upload time: {}", stopwatch);
 	}
 
-	private void upload(Tile tile, GpuIntBuffer vertexBuffer, GpuFloatBuffer uvBuffer)
+	private void upload(Scene scene, Tile tile, GpuIntBuffer vertexBuffer, GpuFloatBuffer uvBuffer)
 	{
 		Tile bridge = tile.getBridge();
 		if (bridge != null)
 		{
-			upload(bridge, vertexBuffer, uvBuffer);
+			upload(scene, bridge, vertexBuffer, uvBuffer);
 		}
 
 		SceneTilePaint sceneTilePaint = tile.getSceneTilePaint();
@@ -109,7 +104,7 @@ class SceneUploader
 				sceneTilePaint.setUvBufferOffset(-1);
 			}
 			Point tilePoint = tile.getSceneLocation();
-			int len = upload(sceneTilePaint,
+			int len = upload(scene, sceneTilePaint,
 					tile.getRenderLevel(), tilePoint.getX(), tilePoint.getY(),
 					vertexBuffer, uvBuffer,
 					0, 0, false);
@@ -204,10 +199,10 @@ class SceneUploader
 		}
 	}
 
-	int upload(SceneTilePaint tile, int tileZ, int tileX, int tileY, GpuIntBuffer vertexBuffer, GpuFloatBuffer uvBuffer,
+	int upload(Scene scene, SceneTilePaint tile, int tileZ, int tileX, int tileY, GpuIntBuffer vertexBuffer, GpuFloatBuffer uvBuffer,
 			   int offsetX, int offsetY, boolean padUvs)
 	{
-		final int[][][] tileHeights = client.getTileHeights();
+		final int[][][] tileHeights = scene.getTileHeights();
 
 		final int localX = offsetX;
 		final int localY = offsetY;
@@ -237,20 +232,20 @@ class SceneUploader
 		final int c1 = swColor;
 
 		// 1,0
-		int vertexCx = localX + LocalPerspective.LOCAL_TILE_SIZE;
+		int vertexCx = localX + Perspective.LOCAL_TILE_SIZE;
 		int vertexCy = localY;
 		int vertexCz = seHeight;
 		final int c2 = seColor;
 
 		// 1,1
-		int vertexAx = localX + LocalPerspective.LOCAL_TILE_SIZE;
-		int vertexAy = localY + LocalPerspective.LOCAL_TILE_SIZE;
+		int vertexAx = localX + Perspective.LOCAL_TILE_SIZE;
+		int vertexAy = localY + Perspective.LOCAL_TILE_SIZE;
 		int vertexAz = neHeight;
 		final int c3 = neColor;
 
 		// 0,1
 		int vertexBx = localX;
-		int vertexBy = localY + LocalPerspective.LOCAL_TILE_SIZE;
+		int vertexBy = localY + Perspective.LOCAL_TILE_SIZE;
 		int vertexBz = nwHeight;
 		final int c4 = nwColor;
 
@@ -299,8 +294,8 @@ class SceneUploader
 		vertexBuffer.ensureCapacity(faceCount * 12);
 		uvBuffer.ensureCapacity(faceCount * 12);
 
-		int baseX = tileX << LocalPerspective.LOCAL_COORD_BITS;
-		int baseY = tileY << LocalPerspective.LOCAL_COORD_BITS;
+		int baseX = tileX << Perspective.LOCAL_COORD_BITS;
+		int baseY = tileY << Perspective.LOCAL_COORD_BITS;
 
 		int cnt = 0;
 		for (int i = 0; i < faceCount; ++i)
@@ -598,8 +593,8 @@ class SceneUploader
 		int orientCosine = 0;
 		if (orientation != 0)
 		{
-			orientSine = LocalPerspective.SINE[orientation];
-			orientCosine = LocalPerspective.COSINE[orientation];
+			orientSine = Perspective.SINE[orientation];
+			orientCosine = Perspective.COSINE[orientation];
 		}
 
 		for (int v = 0; v < vertexCount; ++v)

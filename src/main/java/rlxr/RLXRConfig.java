@@ -25,6 +25,7 @@
  */
 package rlxr;
 
+
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
@@ -34,6 +35,8 @@ import static rlxr.RLXRPlugin.MAX_FOG_DEPTH;
 import rlxr.config.AntiAliasingMode;
 import rlxr.config.ColorBlindMode;
 import rlxr.config.UIScalingMode;
+
+
 
 @ConfigGroup(RLXRConfig.GROUP)
 public interface RLXRConfig extends Config
@@ -46,27 +49,13 @@ public interface RLXRConfig extends Config
 	@ConfigItem(
 			keyName = "drawDistance",
 			name = "Draw Distance",
-			description = "Draw distance",
+			description = "Draw distance. Requires compute shaders to be enabled.",
 			position = 1
 	)
 	default int drawDistance()
 	{
 		return 25;
 	}
-
-	enum cameraMode
-	{
-		normal,
-		free,
-		first_person
-	}
-	@ConfigItem(
-			keyName = "cameraMode",
-			name = "Camera mode",
-			description = "Changes various Camera Modes",
-			position = 12
-	)
-	default cameraMode cameraMode() {return cameraMode.normal;}
 
 	@ConfigItem(
 			keyName = "smoothBanding",
@@ -127,7 +116,6 @@ public interface RLXRConfig extends Config
 		return true;
 	}
 
-
 	@Range(
 			min = 0,
 			max = 16
@@ -142,66 +130,6 @@ public interface RLXRConfig extends Config
 	{
 		return 0;
 	}
-
-	@Range(
-			min = Integer.MIN_VALUE,
-			max = Integer.MAX_VALUE
-	)
-	@ConfigItem(
-			keyName = "CameraXOffset",
-			name = "X Offset",
-			description = "Sets The X Offset.",
-			position = 13
-	)
-	default int CameraXOffset() {return 0;}
-
-	@Range(
-			min = Integer.MIN_VALUE,
-			max = Integer.MAX_VALUE
-	)
-	@ConfigItem(
-			keyName = "CameraYOffset",
-			name = "Y Offset",
-			description = "Sets The Y Offset.",
-			position = 14
-	)
-	default int CameraYOffset() {return 0;}
-
-	@Range(
-			min = Integer.MIN_VALUE,
-			max = Integer.MAX_VALUE
-	)
-	@ConfigItem(
-			keyName = "CameraZOffset",
-			name = "Z Offset",
-			description = "Sets The Z Offset.",
-			position = 15
-	)
-	default int CameraZOffset() {return 0;}
-
-	@Range(
-			min = -600,
-			max = Integer.MAX_VALUE
-	)
-	@ConfigItem(
-			keyName = "XRLenseOffset",
-			name = "XR Offset",
-			description = "Sets The XR Offset.",
-			position = 16
-	)
-	default int XRLenseOffset() {return 0;}
-
-	@Range(
-			min = 1,
-			max = Integer.MAX_VALUE
-	)
-	@ConfigItem(
-			keyName = "XRFOVScale",
-			name = "XR FOV Scale",
-			description = "Sets The XR FOV Scale.",
-			position = 17
-	)
-	default int XrFOVScale() {return 100;}
 
 	@ConfigItem(
 			keyName = "colorBlindMode",
@@ -268,4 +196,78 @@ public interface RLXRConfig extends Config
 	{
 		return 60;
 	}
+	enum cameraMode
+	{
+		normal,
+		free,
+		first_person
+	}
+	@ConfigItem(
+			keyName = "cameraMode",
+			name = "Camera mode",
+			description = "Changes various Camera Modes",
+			position = 12
+	)
+	default cameraMode cameraMode() {return cameraMode.normal;}
+
+	@Range(
+			min = Integer.MIN_VALUE,
+			max = Integer.MAX_VALUE
+	)
+	@ConfigItem(
+			keyName = "CameraXOffset",
+			name = "X Offset",
+			description = "Sets The X Offset.",
+			position = 13
+	)
+	default int CameraXOffset() {return 0;}
+
+	@Range(
+			min = Integer.MIN_VALUE,
+			max = Integer.MAX_VALUE
+	)
+	@ConfigItem(
+			keyName = "CameraYOffset",
+			name = "Y Offset",
+			description = "Sets The Y Offset.",
+			position = 14
+	)
+	default int CameraYOffset() {return 0;}
+
+	@Range(
+			min = Integer.MIN_VALUE,
+			max = Integer.MAX_VALUE
+	)
+	@ConfigItem(
+			keyName = "CameraZOffset",
+			name = "Z Offset",
+			description = "Sets The Z Offset.",
+			position = 15
+	)
+	default int CameraZOffset() {return 0;}
+
+	@Range(
+			min = -600,
+			max = Integer.MAX_VALUE
+	)
+	@ConfigItem(
+			keyName = "XRLenseOffset",
+			name = "XR Offset",
+			description = "Sets The XR Offset.",
+			position = 16
+	)
+	default int XRLenseOffset() {return 0;}
+
+	@Range(
+			min = 1,
+			max = Integer.MAX_VALUE
+	)
+	@ConfigItem(
+			keyName = "XRFOVScale",
+			name = "XR FOV Scale",
+			description = "Sets The XR FOV Scale.",
+			position = 17
+	)
+	default int XrFOVScale() {return 100;}
+
 }

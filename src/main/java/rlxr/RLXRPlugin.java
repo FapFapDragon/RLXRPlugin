@@ -27,10 +27,8 @@ package rlxr;
 
 import com.google.common.primitives.Ints;
 import com.google.inject.Provides;
-import java.awt.Canvas;
-import java.awt.Dimension;
-import java.awt.Graphics2D;
-import java.awt.Image;
+
+import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
@@ -48,9 +46,11 @@ import lombok.val;
 import net.runelite.api.*;
 //Swap perspective for LocalPerspective
 //import net.runelite.api.Perspective;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.NpcSpawned;
 import net.runelite.client.input.MouseManager;
+import net.runelite.client.ui.ClientUI;
 import org.apache.commons.lang3.ObjectUtils;
 
 //OpenXR Stuff
@@ -110,9 +110,11 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	static final int MAX_DISTANCE = 90;
 	static final int MAX_FOG_DEPTH = 100;
 
-
 	@Inject
 	private Client client;
+
+	@Inject
+	private ClientUI clientUI;
 
 	@Inject
 	private OpenCLManager openCLManager;
@@ -135,10 +137,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	@Inject
 	private PluginManager pluginManager;
 
-	@Inject
-	private MouseManager mouseManager;
-
-	public enum ComputeMode
+	enum ComputeMode
 	{
 		NONE,
 		OPENGL,
@@ -151,6 +150,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	private AWTContext awtContext;
 	private Callback debugCallback;
 
+	private GLCapabilities glCapabilities;
+
 	static final String LINUX_VERSION_HEADER =
 			"#version 420\n" +
 					"#extension GL_ARB_compute_shader : require\n" +
@@ -160,6 +161,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 	static final Shader PROGRAM = new Shader()
 			.add(GL43C.GL_VERTEX_SHADER, "vert.glsl")
+			.add(GL43C.GL_GEOMETRY_SHADER, "geom.glsl")
 			.add(GL43C.GL_FRAGMENT_SHADER, "frag.glsl");
 
 	static final Shader COMPUTE_PROGRAM = new Shader()
@@ -175,7 +177,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			.add(GL43C.GL_VERTEX_SHADER, "vertui.glsl")
 			.add(GL43C.GL_FRAGMENT_SHADER, "fragui.glsl");
 
-	private CameraControl camera_info;
+	static final Shader XR_UI_PROGRAM = new Shader()
+			.add(GL43C.GL_VERTEX_SHADER, "xrvertui.glsl")
+			.add(GL43C.GL_FRAGMENT_SHADER, "xrfragui.glsl");
 
 	private int glProgram;
 	private int glComputeProgram;
@@ -183,7 +187,10 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	private int glUnorderedComputeProgram;
 	private int glUiProgram;
 
-	private int vaoHandle;
+	private int glXrUiProgram;
+
+	private int vaoCompute;
+	private int vaoTemp;
 
 	private int interfaceTexture;
 	private int interfacePbo;
@@ -194,22 +201,19 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	private int fboSceneHandle;
 	private int rboSceneHandle;
 
-	// scene vertex buffer
-	private final GLBuffer sceneVertexBuffer = new GLBuffer();
-	// scene uv buffer
-	private final GLBuffer sceneUvBuffer = new GLBuffer();
-
-	private final GLBuffer tmpVertexBuffer = new GLBuffer(); // temporary scene vertex buffer
-	private final GLBuffer tmpUvBuffer = new GLBuffer(); // temporary scene uv buffer
-	private final GLBuffer tmpModelBufferLarge = new GLBuffer(); // scene model buffer, large
-	private final GLBuffer tmpModelBufferSmall = new GLBuffer(); // scene model buffer, small
-	private final GLBuffer tmpModelBufferUnordered = new GLBuffer(); // scene model buffer, unordered
-	private final GLBuffer tmpOutBuffer = new GLBuffer(); // target vertex buffer for compute shaders
-	private final GLBuffer tmpOutUvBuffer = new GLBuffer(); // target uv buffer for compute shaders
+	private final GLBuffer sceneVertexBuffer = new GLBuffer("scene vertex buffer");
+	private final GLBuffer sceneUvBuffer = new GLBuffer("scene tex buffer");
+	private final GLBuffer tmpVertexBuffer = new GLBuffer("tmp vertex buffer");
+	private final GLBuffer tmpUvBuffer = new GLBuffer("tmp tex buffer");
+	private final GLBuffer tmpModelBufferLarge = new GLBuffer("model buffer large");
+	private final GLBuffer tmpModelBufferSmall = new GLBuffer("model buffer small");
+	private final GLBuffer tmpModelBufferUnordered = new GLBuffer("model buffer unordered");
+	private final GLBuffer tmpOutBuffer = new GLBuffer("out vertex buffer");
+	private final GLBuffer tmpOutUvBuffer = new GLBuffer("out tex buffer");
 
 	private int textureArrayId;
 
-	private final GLBuffer uniformBuffer = new GLBuffer();
+	private final GLBuffer uniformBuffer = new GLBuffer("uniform buffer");
 
 	private GpuIntBuffer vertexBuffer;
 	private GpuFloatBuffer uvBuffer;
@@ -280,8 +284,15 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	private int uniTextureLightMode;
 	private int uniTick;
 
+	private int uniXrProjectionMatrix;
+	private int uniXrModelMatrix;
+
 	private boolean lwjglInitted = false;
 
+	private int sceneId;
+	private int nextSceneId;
+	private GpuIntBuffer nextSceneVertexBuffer;
+	private GpuFloatBuffer nextSceneTexBuffer;
 	private XrProgram xr_program;
 
 	@Override
@@ -322,19 +333,17 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				// to be created, and also breaks if both 32 and 64 bit lwjgl versions try to run at once.
 				Configuration.SHARED_LIBRARY_EXTRACT_DIRECTORY.set("lwjgl-rl-" + System.getProperty("os.arch", "unknown"));
 
-				GL.createCapabilities();
+				glCapabilities = GL.createCapabilities();
 
 				log.info("Using device: {}", GL43C.glGetString(GL43C.GL_RENDERER));
 				log.info("Using driver: {}", GL43C.glGetString(GL43C.GL_VERSION));
 
-				GLCapabilities caps = GL.getCapabilities();
-
-				if (!caps.OpenGL31)
+				if (!glCapabilities.OpenGL31)
 				{
 					throw new RuntimeException("OpenGL 3.1 is required but not available");
 				}
 
-				if (!caps.OpenGL43 && computeMode == ComputeMode.OPENGL)
+				if (!glCapabilities.OpenGL43 && computeMode == ComputeMode.OPENGL)
 				{
 					log.info("disabling compute shaders because OpenGL 4.3 is not available");
 					computeMode = ComputeMode.NONE;
@@ -348,7 +357,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				lwjglInitted = true;
 
 				checkGLErrors();
-				if (log.isDebugEnabled() && caps.glDebugMessageControl != 0)
+				if (log.isDebugEnabled() && glCapabilities.glDebugMessageControl != 0)
 				{
 					debugCallback = GLUtil.setupDebugMessageCallback();
 					if (debugCallback != null)
@@ -380,6 +389,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 				setupSyncMode();
 
+				initBuffers();
 				initVao();
 				try
 				{
@@ -391,7 +401,6 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				}
 				initInterfaceTexture();
 				initUniformBuffer();
-				initBuffers();
 
 				client.setDrawCallbacks(this);
 				client.setGpu(true);
@@ -407,14 +416,14 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 				if (client.getGameState() == GameState.LOGGED_IN)
 				{
-					uploadScene();
+					Scene scene = client.getScene();
+					loadScene(scene);
+					swapScene(scene);
 				}
 
 				checkGLErrors();
 
 				//INIT CAMERA CONTROL
-				camera_info = new CameraControl(client, config);
-				LocalPerspective.camera_control = camera_info;
 
 				//Attempt to initialize the openXR session, if it fails throw an error to close the plugin
 				this.xr_program = new XrProgram("Runelite XR Plugin", awtContext);
@@ -469,10 +478,10 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 				destroyGlBuffer(uniformBuffer);
 
-				shutdownBuffers();
 				shutdownInterfaceTexture();
 				shutdownProgram();
 				shutdownVao();
+				shutdownBuffers();
 				shutdownAAFbo();
 			}
 
@@ -488,6 +497,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				debugCallback = null;
 			}
 
+			glCapabilities = null;
+
 			vertexBuffer = null;
 			uvBuffer = null;
 
@@ -496,10 +507,6 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			modelBufferUnordered = null;
 
 			lastAnisotropicFilteringLevel = -1;
-
-			//INIT CAMERA CONTROL
-			//camera_info = new CameraControl(client, config);
-			//camera_info.computeMode = computeMode;
 
 			// force main buffer provider rebuild to turn off alpha channel
 			client.resizeCanvas();
@@ -617,6 +624,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		uniColorBlindMode = GL43C.glGetUniformLocation(glProgram, "colorBlindMode");
 		uniTextureLightMode = GL43C.glGetUniformLocation(glProgram, "textureLightMode");
 		uniTick = GL43C.glGetUniformLocation(glProgram, "tick");
+		uniBlockMain = GL43C.glGetUniformBlockIndex(glProgram, "uniforms");
+		uniTextures = GL43C.glGetUniformLocation(glProgram, "textures");
+		uniTextureAnimations = GL43C.glGetUniformLocation(glProgram, "textureAnimations");
 
 		uniTex = GL43C.glGetUniformLocation(glUiProgram, "tex");
 		uniTexSamplingMode = GL43C.glGetUniformLocation(glUiProgram, "samplingMode");
@@ -624,14 +634,11 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		uniTexSourceDimensions = GL43C.glGetUniformLocation(glUiProgram, "sourceDimensions");
 		uniUiColorBlindMode = GL43C.glGetUniformLocation(glUiProgram, "colorBlindMode");
 		uniUiAlphaOverlay = GL43C.glGetUniformLocation(glUiProgram, "alphaOverlay");
-		uniTextures = GL43C.glGetUniformLocation(glProgram, "textures");
-		uniTextureAnimations = GL43C.glGetUniformLocation(glProgram, "textureAnimations");
 
 		if (computeMode == ComputeMode.OPENGL)
 		{
 			uniBlockSmall = GL43C.glGetUniformBlockIndex(glSmallComputeProgram, "uniforms");
 			uniBlockLarge = GL43C.glGetUniformBlockIndex(glComputeProgram, "uniforms");
-			uniBlockMain = GL43C.glGetUniformBlockIndex(glProgram, "uniforms");
 		}
 	}
 
@@ -655,8 +662,29 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 	private void initVao()
 	{
-		// Create VAO
-		vaoHandle = GL43C.glGenVertexArrays();
+		// Create compute VAO
+		vaoCompute = GL43C.glGenVertexArrays();
+		GL43C.glBindVertexArray(vaoCompute);
+
+		GL43C.glEnableVertexAttribArray(0);
+		GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, tmpOutBuffer.glBufferId);
+		GL43C.glVertexAttribIPointer(0, 4, GL43C.GL_INT, 0, 0);
+
+		GL43C.glEnableVertexAttribArray(1);
+		GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, tmpOutUvBuffer.glBufferId);
+		GL43C.glVertexAttribPointer(1, 4, GL43C.GL_FLOAT, false, 0, 0);
+
+		// Create temp VAO
+		vaoTemp = GL43C.glGenVertexArrays();
+		GL43C.glBindVertexArray(vaoTemp);
+
+		GL43C.glEnableVertexAttribArray(0);
+		GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, tmpVertexBuffer.glBufferId);
+		GL43C.glVertexAttribIPointer(0, 4, GL43C.GL_INT, 0, 0);
+
+		GL43C.glEnableVertexAttribArray(1);
+		GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, tmpUvBuffer.glBufferId);
+		GL43C.glVertexAttribPointer(1, 4, GL43C.GL_FLOAT, false, 0, 0);
 
 		// Create UI VAO
 		vaoUiHandle = GL43C.glGenVertexArrays();
@@ -690,8 +718,11 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 	private void shutdownVao()
 	{
-		GL43C.glDeleteVertexArrays(vaoHandle);
-		vaoHandle = -1;
+		GL43C.glDeleteVertexArrays(vaoCompute);
+		vaoCompute = -1;
+
+		GL43C.glDeleteVertexArrays(vaoTemp);
+		vaoTemp = -1;
 
 		GL43C.glDeleteBuffers(vboUiHandle);
 		vboUiHandle = -1;
@@ -777,8 +808,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		final int[] pad = new int[2];
 		for (int i = 0; i < 2048; i++)
 		{
-			uniformBuf.put(LocalPerspective.SINE[i]);
-			uniformBuf.put(LocalPerspective.COSINE[i]);
+			uniformBuf.put(Perspective.SINE[i]);
+			uniformBuf.put(Perspective.COSINE[i]);
 			uniformBuf.put(pad); // ivec2 alignment in std140 is 16 bytes
 		}
 		uniformBuf.flip();
@@ -789,6 +820,15 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 	private void initAAFbo(int width, int height, int aaSamples)
 	{
+		if (OSType.getOSType() != OSType.MacOS)
+		{
+			final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+			final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
+
+			width = getScaledValue(transform.getScaleX(), width);
+			height = getScaledValue(transform.getScaleY(), height);
+		}
+
 		// Create and bind the FBO
 		fboSceneHandle = GL43C.glGenFramebuffers();
 		GL43C.glBindFramebuffer(GL43C.GL_FRAMEBUFFER, fboSceneHandle);
@@ -798,6 +838,12 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		GL43C.glBindRenderbuffer(GL43C.GL_RENDERBUFFER, rboSceneHandle);
 		GL43C.glRenderbufferStorageMultisample(GL43C.GL_RENDERBUFFER, aaSamples, GL43C.GL_RGBA, width, height);
 		GL43C.glFramebufferRenderbuffer(GL43C.GL_FRAMEBUFFER, GL43C.GL_COLOR_ATTACHMENT0, GL43C.GL_RENDERBUFFER, rboSceneHandle);
+
+		int status = GL43C.glCheckFramebufferStatus(GL43C.GL_FRAMEBUFFER);
+		if (status != GL43C.GL_FRAMEBUFFER_COMPLETE)
+		{
+			throw new RuntimeException("FBO is incomplete. status: " + status);
+		}
 
 		// Reset
 		GL43C.glBindFramebuffer(GL43C.GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
@@ -822,9 +868,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	@Override
 	public void drawScene(int cameraX, int cameraY, int cameraZ, int cameraPitch, int cameraYaw, int plane)
 	{
-
-		yaw = camera_info.getCameraYaw();
-		pitch = camera_info.getCameraPitch();
+		yaw = client.getCameraYaw();
+		pitch = client.getCameraPitch();
 		viewportOffsetX = client.getViewportXOffset();
 		viewportOffsetY = client.getViewportYOffset();
 
@@ -848,9 +893,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				.put(client.getCenterX())
 				.put(client.getCenterY())
 				.put(client.getScale())
-				.put(client.getCameraX2())
-				.put(client.getCameraY2())
-				.put(client.getCameraZ2());
+				.put(cameraX)
+				.put(cameraY)
+				.put(cameraZ);
 		uniformBuf.flip();
 
 		GL43C.glBindBuffer(GL43C.GL_UNIFORM_BUFFER, uniformBuffer.glBufferId);
@@ -907,12 +952,12 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		// Output buffers
 		updateBuffer(tmpOutBuffer,
 				GL43C.GL_ARRAY_BUFFER,
-				targetBufferOffset * 16, // each vertex is an ivec4, which is 16 bytes
+				targetBufferOffset * 16, // each element is an ivec4, which is 16 bytes
 				GL43C.GL_STREAM_DRAW,
 				CL_MEM_WRITE_ONLY);
 		updateBuffer(tmpOutUvBuffer,
 				GL43C.GL_ARRAY_BUFFER,
-				targetBufferOffset * 16, // each vertex is an ivec4, which is 16 bytes
+				targetBufferOffset * 16, // each element is a vec4, which is 16 bytes
 				GL43C.GL_STREAM_DRAW,
 				CL_MEM_WRITE_ONLY);
 
@@ -937,7 +982,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 		/*
 		 * Compute is split into three separate programs: 'unordered', 'small', and 'large'
-		 * to save on GPU resources. Small will sort <= 512 faces, large will do <= 4096.
+		 * to save on GPU resources. Small will sort <= 512 faces, large will do <= 6144.
 		 */
 
 		// Bind UBO to compute programs
@@ -993,19 +1038,19 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	{
 		if (computeMode == ComputeMode.NONE)
 		{
-			targetBufferOffset += sceneUploader.upload(paint,
+			targetBufferOffset += sceneUploader.upload(client.getScene(), paint,
 					tileZ, tileX, tileY,
 					vertexBuffer, uvBuffer,
-					LocalPerspective.LOCAL_TILE_SIZE * tileX,
-					LocalPerspective.LOCAL_TILE_SIZE * tileY,
+					tileX << Perspective.LOCAL_COORD_BITS,
+					tileY << Perspective.LOCAL_COORD_BITS,
 					true
 			);
 		}
 		else if (paint.getBufferLen() > 0)
 		{
-			final int localX = tileX * LocalPerspective.LOCAL_TILE_SIZE;
+			final int localX = tileX << Perspective.LOCAL_COORD_BITS;
 			final int localY = 0;
-			final int localZ = tileY * LocalPerspective.LOCAL_TILE_SIZE;
+			final int localZ = tileY << Perspective.LOCAL_COORD_BITS;
 
 			GpuIntBuffer b = modelBufferUnordered;
 			++unorderedModels;
@@ -1168,9 +1213,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				XrMatrix4x4f  view_matrix = new XrMatrix4x4f();
 				XrVector3f mod_pos = XrVector3f.calloc(stack);
 				XrVector3f pose = views.get(i).pose().position$();
-				mod_pos.x(camera_info.getCameraX2() + (pose.x() * 50));
-				mod_pos.y(camera_info.getCameraY2() + (pose.y() * 50));
-				mod_pos.z(camera_info.getCameraZ2() + (pose.z() * 50));
+				mod_pos.x(client.getCameraX2() + (pose.x() * 50));
+				mod_pos.y(client.getCameraY2() + (pose.y() * 50));
+				mod_pos.z(client.getCameraZ2() + (pose.z() * 50));
 				//XrMatrix4x4f.CreateViewMatrix(view_matrix, views.get(i).pose().position$(), views.get(i).pose().orientation());
 
 				XrQuaternionf orient = views.get(i).pose().orientation();
@@ -1393,17 +1438,10 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 			// Calculate projection matrix
 			int scale = 497;
-			//float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
 			float[] projectionMatrix = Mat4.scale(scale, scale, 1);
-
-			XrMatrix4x4f vp_matrix = new XrMatrix4x4f();
-
-			XrMatrix4x4f.Multiply(vp_matrix, perspective_matrix, view_matrix);
-			XrMatrix4x4f transposeVP = new XrMatrix4x4f();
-			//XrMatrix4x4f.transpose(transposeVP, vp_matrix);
-			//XrMatrix4x4f.CreateScale(transposeVP, 1, -1, 1);
-			Mat4.mul(projectionMatrix, vp_matrix.toFloatArray());
-
+			float[] vp_matrix = perspective_matrix.toFloatArray();
+			Mat4.mul(vp_matrix, view_matrix.toFloatArray());
+			Mat4.mul(projectionMatrix, vp_matrix);
 
 			GL43C.glUniformMatrix4fv(uniProjectionMatrix, false, projectionMatrix);
 
@@ -1420,9 +1458,6 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			GL43C.glBlendFuncSeparate(GL43C.GL_SRC_ALPHA, GL43C.GL_ONE_MINUS_SRC_ALPHA, GL43C.GL_ONE, GL43C.GL_ONE);
 
 			// Draw buffers
-			GL43C.glBindVertexArray(vaoHandle);
-
-			int vertexBuffer, uvBuffer;
 			if (computeMode != ComputeMode.NONE)
 			{
 				if (computeMode == ComputeMode.OPENGL)
@@ -1437,25 +1472,16 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				}
 
 				// Draw using the output buffer of the compute
-				vertexBuffer = tmpOutBuffer.glBufferId;
-				uvBuffer = tmpOutUvBuffer.glBufferId;
+				GL43C.glBindVertexArray(vaoCompute);
 			}
 			else
 			{
 				// Only use the temporary buffers, which will contain the full scene
-				vertexBuffer = tmpVertexBuffer.glBufferId;
-				uvBuffer = tmpUvBuffer.glBufferId;
+				GL43C.glBindVertexArray(vaoTemp);
 			}
 
-			GL43C.glEnableVertexAttribArray(0);
-			GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, vertexBuffer);
-			GL43C.glVertexAttribIPointer(0, 4, GL43C.GL_INT, 0, 0);
-
-			GL43C.glEnableVertexAttribArray(1);
-			GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, uvBuffer);
-			GL43C.glVertexAttribPointer(1, 4, GL43C.GL_FLOAT, false, 0, 0);
-
 			GL43C.glDrawArrays(GL43C.GL_TRIANGLES, 0, targetBufferOffset);
+
 
 			GL43C.glDisable(GL43C.GL_BLEND);
 			GL43C.glDisable(GL43C.GL_CULL_FACE);
@@ -1463,20 +1489,20 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			GL43C.glUseProgram(0);
 		}
 
-		//Don't clear anything but may need to rewind buffers
-		/*
-		vertexBuffer.clear();
-		uvBuffer.clear();
-		modelBuffer.clear();
-		modelBufferSmall.clear();
-		modelBufferUnordered.clear();
+		//Calculate MVP for UI
+		/*float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
+		float[] vp_matrix = perspective_matrix.toFloatArray();
+		Mat4.mul(vp_matrix, view_matrix.toFloatArray());
+		Mat4.mul(projectionMatrix, vp_matrix);
 
-		smallModels = largeModels = unorderedModels = 0;
-		tempOffset = 0;
-		tempUvOffset = 0;
-		*/
-		// Texture on UI should be done with Quad composition Layer if at all
-		//drawUi(overlayColor, canvasHeight, canvasWidth);
+		GL43C.glUniformMatrix4fv(uniXrProjectionMatrix, false, projectionMatrix);
+
+		//Draw UI
+		GL43C.glUseProgram(glXrUiProgram);
+		// Texture on UI
+		GL43C.glBindVertexArray(vaoUiHandle);
+		GL43C.glDrawArrays(GL43C.GL_TRIANGLE_FAN, 0, 4);
+		GL43C.glUseProgram(0);*/
 
 		GL43C.glBindFramebuffer(GL43C.GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
 
@@ -1491,7 +1517,6 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		final int viewportHeight = client.getViewportHeight();
 		final int viewportWidth = client.getViewportWidth();
 
-		//Not Drawing UI Right Now
 		prepareInterfaceTexture(canvasWidth, canvasHeight);
 
 		// Setup anti-aliasing
@@ -1608,7 +1633,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			GL43C.glUniform1i(uniUseFog, fogDepth > 0 ? 1 : 0);
 			GL43C.glUniform4f(uniFogColor, (sky >> 16 & 0xFF) / 255f, (sky >> 8 & 0xFF) / 255f, (sky & 0xFF) / 255f, 1f);
 			GL43C.glUniform1i(uniFogDepth, fogDepth);
-			GL43C.glUniform1i(uniDrawDistance, drawDistance * LocalPerspective.LOCAL_TILE_SIZE);
+			GL43C.glUniform1i(uniDrawDistance, drawDistance * Perspective.LOCAL_TILE_SIZE);
 
 			// Brightness happens to also be stored in the texture provider, so we use that
 			GL43C.glUniform1f(uniBrightness, (float) textureProvider.getBrightness());
@@ -1624,11 +1649,9 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			// Calculate projection matrix
 			float[] projectionMatrix = Mat4.scale(client.getScale(), client.getScale(), 1);
 			Mat4.mul(projectionMatrix, Mat4.projection(viewportWidth, viewportHeight, 50));
-			Mat4.mul(projectionMatrix, Mat4.rotateX((float) -(Math.PI - camera_info.getCameraPitch() * LocalPerspective.UNIT)));
-			Mat4.mul(projectionMatrix, Mat4.rotateY((float) (camera_info.getCameraYaw() * LocalPerspective.UNIT)));
-
-			//This is the only place you need to change the Camera Values??
-			Mat4.mul(projectionMatrix, Mat4.translate(-camera_info.getCameraX2(), -camera_info.getCameraY2(), -camera_info.getCameraZ2()));
+			Mat4.mul(projectionMatrix, Mat4.rotateX((float) -(Math.PI - pitch * Perspective.UNIT)));
+			Mat4.mul(projectionMatrix, Mat4.rotateY((float) (yaw * Perspective.UNIT)));
+			Mat4.mul(projectionMatrix, Mat4.translate(-client.getCameraX2(), -client.getCameraY2(), -client.getCameraZ2()));
 			GL43C.glUniformMatrix4fv(uniProjectionMatrix, false, projectionMatrix);
 
 			// Bind uniforms
@@ -1644,9 +1667,6 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			GL43C.glBlendFuncSeparate(GL43C.GL_SRC_ALPHA, GL43C.GL_ONE_MINUS_SRC_ALPHA, GL43C.GL_ONE, GL43C.GL_ONE);
 
 			// Draw buffers
-			GL43C.glBindVertexArray(vaoHandle);
-
-			int vertexBuffer, uvBuffer;
 			if (computeMode != ComputeMode.NONE)
 			{
 				if (computeMode == ComputeMode.OPENGL)
@@ -1661,23 +1681,13 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				}
 
 				// Draw using the output buffer of the compute
-				vertexBuffer = tmpOutBuffer.glBufferId;
-				uvBuffer = tmpOutUvBuffer.glBufferId;
+				GL43C.glBindVertexArray(vaoCompute);
 			}
 			else
 			{
 				// Only use the temporary buffers, which will contain the full scene
-				vertexBuffer = tmpVertexBuffer.glBufferId;
-				uvBuffer = tmpUvBuffer.glBufferId;
+				GL43C.glBindVertexArray(vaoTemp);
 			}
-
-			GL43C.glEnableVertexAttribArray(0);
-			GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, vertexBuffer);
-			GL43C.glVertexAttribIPointer(0, 4, GL43C.GL_INT, 0, 0);
-
-			GL43C.glEnableVertexAttribArray(1);
-			GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, uvBuffer);
-			GL43C.glVertexAttribPointer(1, 4, GL43C.GL_FLOAT, false, 0, 0);
 
 			GL43C.glDrawArrays(GL43C.GL_TRIANGLES, 0, targetBufferOffset);
 
@@ -1689,10 +1699,21 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 		if (aaEnabled)
 		{
+			int width = lastStretchedCanvasWidth;
+			int height = lastStretchedCanvasHeight;
+
+			if (OSType.getOSType() != OSType.MacOS)
+			{
+				final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+				final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
+
+				width = getScaledValue(transform.getScaleX(), width);
+				height = getScaledValue(transform.getScaleY(), height);
+			}
+
 			GL43C.glBindFramebuffer(GL43C.GL_READ_FRAMEBUFFER, fboSceneHandle);
 			GL43C.glBindFramebuffer(GL43C.GL_DRAW_FRAMEBUFFER, awtContext.getFramebuffer(false));
-			GL43C.glBlitFramebuffer(0, 0, lastStretchedCanvasWidth, lastStretchedCanvasHeight,
-					0, 0, lastStretchedCanvasWidth, lastStretchedCanvasHeight,
+			GL43C.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
 					GL43C.GL_COLOR_BUFFER_BIT, GL43C.GL_NEAREST);
 
 			// Reset
@@ -1778,6 +1799,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		vertexBuffer.clear();
 	}
 
+
 	/**
 	 * Convert the front framebuffer to an Image
 	 *
@@ -1797,11 +1819,10 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 		if (OSType.getOSType() != OSType.MacOS)
 		{
-			final Graphics2D graphics = (Graphics2D) canvas.getGraphics();
-			final AffineTransform t = graphics.getTransform();
+			final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+			final AffineTransform t = graphicsConfiguration.getDefaultTransform();
 			width = getScaledValue(t.getScaleX(), width);
 			height = getScaledValue(t.getScaleY(), height);
-			graphics.dispose();
 		}
 
 		ByteBuffer buffer = ByteBuffer.allocateDirect(width * height * 4)
@@ -1838,41 +1859,49 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged gameStateChanged)
 	{
-		switch (gameStateChanged.getGameState())
+		if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN)
 		{
-			case LOGGED_IN:
-				if (computeMode != ComputeMode.NONE)
-				{
-					this.uploadScene();
-					checkGLErrors();
-				}
-				break;
-			case LOGIN_SCREEN:
-				// Avoid drawing the last frame's buffer during LOADING after LOGIN_SCREEN
-				targetBufferOffset = 0;
+			// Avoid drawing the last frame's buffer during LOADING after LOGIN_SCREEN
+			targetBufferOffset = 0;
 		}
 	}
 
-	private void uploadScene()
+	@Override
+	public void loadScene(Scene scene)
 	{
-		vertexBuffer.clear();
-		uvBuffer.clear();
+		if (computeMode == ComputeMode.NONE)
+		{
+			return;
+		}
 
-		sceneUploader.upload(client.getScene(), vertexBuffer, uvBuffer);
+		GpuIntBuffer vertexBuffer = new GpuIntBuffer();
+		GpuFloatBuffer uvBuffer = new GpuFloatBuffer();
+
+		sceneUploader.upload(scene, vertexBuffer, uvBuffer);
 
 		vertexBuffer.flip();
 		uvBuffer.flip();
 
-		IntBuffer vertexBuffer = this.vertexBuffer.getBuffer();
-		FloatBuffer uvBuffer = this.uvBuffer.getBuffer();
+		nextSceneVertexBuffer = vertexBuffer;
+		nextSceneTexBuffer = uvBuffer;
+		nextSceneId = sceneUploader.sceneId;
+	}
 
-		updateBuffer(sceneVertexBuffer, GL43C.GL_ARRAY_BUFFER, vertexBuffer, GL43C.GL_STATIC_COPY, CL_MEM_READ_ONLY);
-		updateBuffer(sceneUvBuffer, GL43C.GL_ARRAY_BUFFER, uvBuffer, GL43C.GL_STATIC_COPY, CL_MEM_READ_ONLY);
+	@Override
+	public void swapScene(Scene scene)
+	{
+		if (computeMode == ComputeMode.NONE)
+		{
+			return;
+		}
 
-		GL43C.glBindBuffer(GL43C.GL_ARRAY_BUFFER, 0);
+		sceneId = nextSceneId;
+		updateBuffer(sceneVertexBuffer, GL43C.GL_ARRAY_BUFFER, nextSceneVertexBuffer.getBuffer(), GL43C.GL_STATIC_COPY, CL_MEM_READ_ONLY);
+		updateBuffer(sceneUvBuffer, GL43C.GL_ARRAY_BUFFER, nextSceneTexBuffer.getBuffer(), GL43C.GL_STATIC_COPY, CL_MEM_READ_ONLY);
 
-		vertexBuffer.clear();
-		uvBuffer.clear();
+		nextSceneVertexBuffer = null;
+		nextSceneTexBuffer = null;
+		nextSceneId = -1;
 	}
 
 	/**
@@ -1880,12 +1909,12 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	 */
 	private boolean isVisible(Model model, int pitchSin, int pitchCos, int yawSin, int yawCos, int x, int y, int z)
 	{
-
-		model.calculateBoundsCylinder();
-		if(true)
+		if (true)
 		{
 			return true;
 		}
+		model.calculateBoundsCylinder();
+
 		final int xzMag = model.getXYZMag();
 		final int bottomY = model.getBottomY();
 		final int zoom = client.get3dZoom();
@@ -1942,14 +1971,6 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 	@Override
 	public void draw(Renderable renderable, int orientation, int pitchSin, int pitchCos, int yawSin, int yawCos, int x, int y, int z, long hash)
 	{
-		int mod_x = (x + client.getCameraX2() - camera_info.getCameraX2());
-		int mod_y = (y + client.getCameraY2() - camera_info.getCameraY2());
-		int mod_z = (z + client.getCameraZ2() - camera_info.getCameraZ2());
-		final int
-				mod_pitchSin =  LocalPerspective.SINE[camera_info.getCameraPitch()] ,
-				mod_pitchCos = LocalPerspective.COSINE[camera_info.getCameraPitch()],
-				mod_yawSin = LocalPerspective.SINE[camera_info.getCameraYaw()] ,
-				mod_yawCos = LocalPerspective.COSINE[camera_info.getCameraYaw()] ;
 		if (computeMode == ComputeMode.NONE)
 		{
 			Model model = renderable instanceof Model ? (Model) renderable : renderable.getModel();
@@ -1961,36 +1982,32 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 					renderable.setModelHeight(model.getModelHeight());
 				}
 
-				if (!isVisible(model, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x, mod_y, mod_z))
+				if (!isVisible(model, pitchSin, pitchCos, yawSin, yawCos, x, y, z))
 				{
 					return;
 				}
 
-				model.calculateExtreme(orientation);
-
-
-				client.checkClickbox(model, orientation, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x, mod_y, mod_z, hash);
+				client.checkClickbox(model, orientation, pitchSin, pitchCos, yawSin, yawCos, x, y, z, hash);
 
 				targetBufferOffset += sceneUploader.pushSortedModel(
 						model, orientation,
-						mod_pitchSin, mod_pitchCos,
-						mod_yawSin, mod_yawCos,
+						pitchSin, pitchCos,
+						yawSin, yawCos,
 						x, y, z,
 						vertexBuffer, uvBuffer);
 			}
 		}
 		// Model may be in the scene buffer
-		else if (renderable instanceof Model && ((Model) renderable).getSceneId() == sceneUploader.sceneId)
+		else if (renderable instanceof Model && ((Model) renderable).getSceneId() == sceneId)
 		{
 			Model model = (Model) renderable;
 
-			if (!isVisible(model, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x,mod_y, mod_z))
+			if (!isVisible(model, pitchSin, pitchCos, yawSin, yawCos, x, y, z))
 			{
 				return;
 			}
 
-			model.calculateExtreme(orientation);
-			client.checkClickbox(model, orientation, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x, mod_y, mod_z, hash);
+			client.checkClickbox(model, orientation, pitchSin, pitchCos, yawSin, yawCos, x, y, z, hash);
 
 			int tc = Math.min(MAX_TRIANGLE, model.getFaceCount());
 			int uvOffset = model.getUvBufferOffset();
@@ -2020,13 +2037,12 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 					renderable.setModelHeight(model.getModelHeight());
 				}
 
-				if (!isVisible(model, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x, mod_y, mod_z))
+				if (!isVisible(model, pitchSin, pitchCos, yawSin, yawCos, x, y, z))
 				{
 					return;
 				}
 
-				model.calculateExtreme(orientation);
-				client.checkClickbox(model, orientation, mod_pitchSin, mod_pitchCos, mod_yawSin, mod_yawCos, mod_x, mod_y, mod_z, hash);
+				client.checkClickbox(model, orientation, pitchSin, pitchCos, yawSin, yawCos, x, y, z, hash);
 
 				boolean hasUv = model.getFaceTextures() != null;
 
@@ -2041,7 +2057,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				buffer.put(len / 3);
 				buffer.put(targetBufferOffset);
 				buffer.put((model.getRadius() << 12) | orientation);
-				buffer.put(x + client.getCameraX2()).put(y + client.getCameraY2() ).put(z + client.getCameraZ2());
+				buffer.put(x + client.getCameraX2()).put(y + client.getCameraY2()).put(z + client.getCameraZ2());
 
 				tempOffset += len;
 				if (hasUv)
@@ -2094,14 +2110,13 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		}
 		else
 		{
-			final Graphics2D graphics = (Graphics2D) canvas.getGraphics();
-			final AffineTransform t = graphics.getTransform();
+			final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+			final AffineTransform t = graphicsConfiguration.getDefaultTransform();
 			GL43C.glViewport(
 					getScaledValue(t.getScaleX(), x),
 					getScaledValue(t.getScaleY(), y),
 					getScaledValue(t.getScaleX(), width),
 					getScaledValue(t.getScaleY(), height));
-			graphics.dispose();
 		}
 	}
 
@@ -2113,51 +2128,48 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 
 	private void updateBuffer(@Nonnull GLBuffer glBuffer, int target, @Nonnull IntBuffer data, int usage, long clFlags)
 	{
-		GL43C.glBindBuffer(target, glBuffer.glBufferId);
-		int size = data.remaining();
-		if (size > glBuffer.size)
-		{
-			log.trace("Buffer resize: {} {} -> {}", glBuffer, glBuffer.size, size);
-
-			glBuffer.size = size;
-			GL43C.glBufferData(target, data, usage);
-			recreateCLBuffer(glBuffer, clFlags);
-		}
-		else
-		{
-			GL43C.glBufferSubData(target, 0, data);
-		}
+		int size = data.remaining() << 2;
+		updateBuffer(glBuffer, target, size, usage, clFlags);
+		GL43C.glBufferSubData(target, 0, data);
 	}
 
 	private void updateBuffer(@Nonnull GLBuffer glBuffer, int target, @Nonnull FloatBuffer data, int usage, long clFlags)
 	{
-		GL43C.glBindBuffer(target, glBuffer.glBufferId);
-		int size = data.remaining();
-		if (size > glBuffer.size)
-		{
-			log.trace("Buffer resize: {} {} -> {}", glBuffer, glBuffer.size, size);
-
-			glBuffer.size = size;
-			GL43C.glBufferData(target, data, usage);
-			recreateCLBuffer(glBuffer, clFlags);
-		}
-		else
-		{
-			GL43C.glBufferSubData(target, 0, data);
-		}
+		int size = data.remaining() << 2;
+		updateBuffer(glBuffer, target, size, usage, clFlags);
+		GL43C.glBufferSubData(target, 0, data);
 	}
 
 	private void updateBuffer(@Nonnull GLBuffer glBuffer, int target, int size, int usage, long clFlags)
 	{
 		GL43C.glBindBuffer(target, glBuffer.glBufferId);
+		if (glCapabilities.glInvalidateBufferData != 0L)
+		{
+			// https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming suggests buffer re-specification is useful
+			// to avoid implicit synching. We always need to trash the whole buffer anyway so this can't hurt.
+			GL43C.glInvalidateBufferData(glBuffer.glBufferId);
+		}
 		if (size > glBuffer.size)
 		{
-			log.trace("Buffer resize: {} {} -> {}", glBuffer, glBuffer.size, size);
+			int newSize = Math.max(1024, nextPowerOfTwo(size));
+			log.trace("Buffer resize: {} {} -> {}", glBuffer.name, glBuffer.size, newSize);
 
-			glBuffer.size = size;
-			GL43C.glBufferData(target, size, usage);
+			glBuffer.size = newSize;
+			GL43C.glBufferData(target, newSize, usage);
 			recreateCLBuffer(glBuffer, clFlags);
 		}
+	}
+
+	private static int nextPowerOfTwo(int v)
+	{
+		v--;
+		v |= v >> 1;
+		v |= v >> 2;
+		v |= v >> 4;
+		v |= v >> 8;
+		v |= v >> 16;
+		v++;
+		return v;
 	}
 
 	private void recreateCLBuffer(GLBuffer glBuffer, long clFlags)
@@ -2178,7 +2190,6 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			}
 		}
 	}
-
 
 	private void checkGLErrors()
 	{

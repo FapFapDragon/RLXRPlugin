@@ -123,8 +123,6 @@ public class CameraControl  {
 
     public int getCameraZ2()
     {
-
-
         if (config.cameraMode() == RLXRConfig.cameraMode.free)
         {
             if (free_z == Integer.MIN_VALUE)

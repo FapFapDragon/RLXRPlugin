@@ -23,7 +23,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 package rlxr.template;
-
 import com.google.common.io.CharStreams;
 import java.io.IOException;
 import java.io.InputStream;
@@ -47,6 +46,11 @@ public class Template
 			if (line.startsWith("#include "))
 			{
 				String resource = line.substring(9);
+				if (resource.startsWith("\"") && resource.endsWith("\""))
+				{
+					resource = resource.substring(1, resource.length() - 1);
+				}
+
 				String resourceStr = load(resource);
 				sb.append(resourceStr);
 			}

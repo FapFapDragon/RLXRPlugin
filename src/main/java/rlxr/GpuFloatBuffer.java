@@ -27,14 +27,17 @@ package rlxr;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
 
 class GpuFloatBuffer
 {
 	private FloatBuffer buffer = allocateDirect(65536);
 
-	void put(float texture, float u, float v, float pad)
+	void put(float s, float t, float p, float q)
 	{
-		buffer.put(texture).put(u).put(v).put(pad);
+		buffer.put(s).put(t).put(p).put(q);
 	}
 
 	void flip()
@@ -74,7 +77,7 @@ class GpuFloatBuffer
 	static FloatBuffer allocateDirect(int size)
 	{
 		return ByteBuffer.allocateDirect(size * Float.BYTES)
-			.order(ByteOrder.nativeOrder())
-			.asFloatBuffer();
+				.order(ByteOrder.nativeOrder())
+				.asFloatBuffer();
 	}
 }
