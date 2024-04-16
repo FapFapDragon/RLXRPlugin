@@ -1,3 +1,5 @@
+package rlxr;
+
 /*
  * Copyright (c) 2021, Adam <Adam@sigterm.info>
  * All rights reserved.
@@ -22,25 +24,16 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package rlxr;
-
-import org.jocl.Pointer;
-import org.jocl.cl_mem;
 
 class GLBuffer
 {
 	String name;
 	int glBufferId = -1;
 	int size = -1;
-	cl_mem cl_mem;
+	long clBuffer = -1;
 
 	GLBuffer(String name)
 	{
 		this.name = name;
-	}
-
-	Pointer ptr()
-	{
-		return cl_mem != null ? Pointer.to(cl_mem) : null;
 	}
 }
