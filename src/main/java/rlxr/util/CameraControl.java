@@ -57,7 +57,7 @@ public class CameraControl  {
         {
             if (free_x == Integer.MIN_VALUE)
             {
-                free_x = client.getCameraX2();
+                free_x = client.getCameraX();
             }
             return  free_x + config.CameraXOffset();
         }
@@ -77,12 +77,12 @@ public class CameraControl  {
             }
             catch (NullPointerException e)
             {
-                return  client.getCameraX2();
+                return  client.getCameraX();
             }
         }
         else
         {
-            return client.getCameraX2();
+            return client.getCameraX();
         }
     }
 
@@ -92,7 +92,7 @@ public class CameraControl  {
         {
             if (free_y == Integer.MIN_VALUE)
             {
-                free_y = client.getCameraY2();
+                free_y = client.getCameraY();
             }
             return  free_y + config.CameraYOffset();
         }
@@ -112,12 +112,12 @@ public class CameraControl  {
             }
             catch (NullPointerException e)
             {
-                return  client.getCameraY2();
+                return  client.getCameraY();
             }
         }
         else
         {
-            return client.getCameraY2();
+            return client.getCameraY();
         }
     }
 
@@ -127,7 +127,7 @@ public class CameraControl  {
         {
             if (free_z == Integer.MIN_VALUE)
             {
-                free_z = client.getCameraZ2();
+                free_z = client.getCameraZ();
             }
             return  free_z + config.CameraZOffset();
         }
@@ -148,12 +148,12 @@ public class CameraControl  {
             }
             catch (NullPointerException e)
             {
-                return  client.getCameraZ2();
+                return  client.getCameraZ();
             }
         }
         else
         {
-            return client.getCameraZ2();
+            return client.getCameraZ();
         }
     }
 

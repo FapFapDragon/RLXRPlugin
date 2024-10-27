@@ -724,10 +724,11 @@ public class LocalPerspective
             return null;
         }
 
+        /*
         if (model.isClickable())
         {
             return bounds;
-        }
+        }*/
 
         if (bounds != null)
         {
@@ -795,13 +796,13 @@ public class LocalPerspective
         int[] y2d = new int[m.getVerticesCount()];
         final int[] faceColors3 = m.getFaceColors3();
 
-        LocalPerspective.modelToCanvasCpu(client,
+  /*      LocalPerspective.modelToCanvasCpu(client,
                 m.getVerticesCount(),
                 x, y, z,
                 jauOrient,
                 m.getVerticesX(), m.getVerticesZ(), m.getVerticesY(),
                 x2d, y2d);
-
+*/
         final int radius = 5;
 
         int[][] tris = new int[][]{

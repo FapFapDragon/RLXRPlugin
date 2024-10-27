@@ -222,6 +222,17 @@ public interface RLXRConfig extends Config
 		return 60;
 	}
 
+	@ConfigItem(
+			keyName = "removeVertexSnapping",
+			name = "Remove vertex snapping",
+			description = "Removes vertex snapping from most animations",
+			position = 13
+	)
+	default boolean removeVertexSnapping()
+	{
+		return true;
+	}
+
 	enum cameraMode
 	{
 		normal,
@@ -295,5 +306,6 @@ public interface RLXRConfig extends Config
 			position = 17
 	)
 	default int XrFOVScale() {return 100;}
+
 
 }
