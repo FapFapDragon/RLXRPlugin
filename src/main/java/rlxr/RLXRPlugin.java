@@ -1409,8 +1409,39 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		//Not Drawing UI Right Now
 		//prepareInterfaceTexture(canvasWidth, canvasHeight);
 
-		GL43C.glDisable(GL43C.GL_MULTISAMPLE);
-		shutdownFbo();
+		// Setup FBO and anti-aliasing
+		/*{
+			final AntiAliasingMode antiAliasingMode = AntiAliasingMode.DISABLED;
+			final Dimension stretchedDimensions = client.getStretchedDimensions();
+
+			final int stretchedCanvasWidth = client.isStretchedEnabled() ? stretchedDimensions.width : canvasWidth;
+			final int stretchedCanvasHeight = client.isStretchedEnabled() ? stretchedDimensions.height : canvasHeight;
+
+			// Re-create fbo
+			if (lastStretchedCanvasWidth != stretchedCanvasWidth
+					|| lastStretchedCanvasHeight != stretchedCanvasHeight
+					|| lastAntiAliasingMode != antiAliasingMode)
+			{
+				shutdownFbo();
+
+				// Bind default FBO to check whether anti-aliasing is forced
+				GL43C.glBindFramebuffer(GL43C.GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
+				final int forcedAASamples = GL43C.glGetInteger(GL43C.GL_SAMPLES);
+				final int maxSamples = GL43C.glGetInteger(GL43C.GL_MAX_SAMPLES);
+				final int samples = forcedAASamples != 0 ? forcedAASamples :
+						Math.min(antiAliasingMode.getSamples(), maxSamples);
+
+				log.debug("AA samples: {}, max samples: {}, forced samples: {}", samples, maxSamples, forcedAASamples);
+
+				initFbo(stretchedCanvasWidth, stretchedCanvasHeight, samples);
+
+				lastStretchedCanvasWidth = stretchedCanvasWidth;
+				lastStretchedCanvasHeight = stretchedCanvasHeight;
+				lastAntiAliasingMode = antiAliasingMode;
+			}
+
+			GL43C.glBindFramebuffer(GL43C.GL_DRAW_FRAMEBUFFER, fboScene);
+		}*/
 
 		// Clear scene
 		GL43C.glBindFramebuffer(GL43C.GL_FRAMEBUFFER, frame_buffer);
@@ -1552,8 +1583,8 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			GL43C.glUseProgram(0);
 		}
 
-		// Blit FBO
-		/*{
+		/*// Blit FBO
+		{
 			int temp_width = lastStretchedCanvasWidth;
 			int temp_height = lastStretchedCanvasHeight;
 
@@ -1571,7 +1602,6 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 			// Reset
 			GL43C.glBindFramebuffer(GL43C.GL_READ_FRAMEBUFFER, awtContext.getFramebuffer(false));
 		}*/
-		GL43C.glDrawArrays(GL43C.GL_TRIANGLES, 0, targetBufferOffset);
 
 		vertexBuffer.clear();
 		uvBuffer.clear();
