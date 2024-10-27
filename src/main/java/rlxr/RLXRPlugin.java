@@ -1259,7 +1259,7 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 				XrMatrix4x4f  view_matrix = new XrMatrix4x4f();
 				XrVector3f mod_pos = XrVector3f.calloc(stack);
 				XrVector3f pose = views.get(i).pose().position$();
-				mod_pos.x((float)cameraX + (pose.x() * 50));
+				mod_pos.x((float)cameraX - (pose.x() * 50));
 				mod_pos.y((float)cameraY + (pose.y() * 50));
 				mod_pos.z((float)cameraZ + (pose.z() * 50));
 				//XrMatrix4x4f.CreateViewMatrix(view_matrix, views.get(i).pose().position$(), views.get(i).pose().orientation());
@@ -1616,22 +1616,6 @@ public class RLXRPlugin extends Plugin implements DrawCallbacks
 		// Texture on UI
 		/*drawUi(overlayColor, canvasHeight, canvasWidth);
 		 */
-
-		try
-		{
-			awtContext.swapBuffers();
-		}
-		catch (RuntimeException ex)
-		{
-			// this is always fatal
-			if (!canvas.isValid())
-			{
-				// this might be AWT shutting down on VM shutdown, ignore it
-				return false;
-			}
-
-			throw ex;
-		}
 
 		GL43C.glBindFramebuffer(GL43C.GL_FRAMEBUFFER, awtContext.getFramebuffer(false));
 
